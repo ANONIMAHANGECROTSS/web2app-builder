@@ -12,10 +12,6 @@ on:
         required: true
         type: string
 
-# TAMBAHAN WAJIB: Supaya proses Upload Release tidak kena Permission Denied
-permissions:
-  contents: write
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -29,16 +25,36 @@ jobs:
           java-version: '17'
 
       - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: 'stable'
-          cache: true
+        run: |
+          git clone https://github.com/flutter/flutter.git --depth 1 -b stable /opt/flutter
+          echo "/opt/flutter/bin" >> $GITHUB_PATH
+          echo "$HOME/.pub-cache/bin" >> $GITHUB_PATH
 
-      - name: Accept Android Licenses
-        run: yes | flutter doctor --android-licenses
+      - name: Verify Flutter
+        run: |
+          export PATH="/opt/flutter/bin:$HOME/.pub-cache/bin:$PATH"
+          flutter precache
+          flutter doctor -v
+
+      - name: Setup Android SDK
+        run: |
+          export PATH="/opt/flutter/bin:$PATH"
+          mkdir -p $HOME/android-sdk/cmdline-tools
+          cd $HOME/android-sdk
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          unzip -q commandlinetools-linux-11076708_latest.zip
+          mv cmdline-tools cmdline-tools-temp
+          mkdir -p cmdline-tools
+          mv cmdline-tools-temp cmdline-tools/latest
+          echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
+          export PATH="$PATH:$HOME/android-sdk/cmdline-tools/latest/bin"
+          yes | sdkmanager --licenses > /dev/null 2>&1
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
       - name: Create Project
         run: |
+          export PATH="/opt/flutter/bin:$HOME/.pub-cache/bin:$PATH"
           flutter create --platforms=android --project-name=web2app web2app_temp
           cd web2app_temp
 
@@ -106,68 +122,7 @@ jobs:
 
       - name: Build APK
         run: |
-          cd web2app_temp
-          flutter build apk --release
-
-      - name: Upload Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: latest
-          name: "${{ github.event.inputs.app_name }}"
-          files: web2app_temp/build/app/outputs/flutter-apk/app-release.apk
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          EOF
-
-          cat > lib/main.dart << 'EOF'
-          import 'package:flutter/material.dart';
-          import 'package:webview_flutter/webview_flutter.dart';
-
-          void main() => runApp(const MyApp());
-
-          class MyApp extends StatelessWidget {
-            const MyApp({super.key});
-            @override
-            Widget build(BuildContext context) {
-              return MaterialApp(
-                title: 'APP_NAME_PLACEHOLDER',
-                debugShowCheckedModeBanner: false,
-                home: const WebViewScreen(),
-              );
-            }
-          }
-
-          class WebViewScreen extends StatefulWidget {
-            const WebViewScreen({super.key});
-            @override
-            State<WebViewScreen> createState() => _WebViewScreenState();
-          }
-
-          class _WebViewScreenState extends State<WebViewScreen> {
-            late final WebViewController controller;
-            @override
-            void initState() {
-              super.initState();
-              controller = WebViewController()
-                ..setJavaScriptMode(JavaScriptMode.unrestricted)
-                ..loadRequest(Uri.parse('URL_PLACEHOLDER'));
-            }
-            @override
-            Widget build(BuildContext context) {
-              return Scaffold(
-                body: WebViewWidget(controller: controller),
-              );
-            }
-          }
-          EOF
-
-          sed -i "s|APP_NAME_PLACEHOLDER|${{ github.event.inputs.app_name }}|g" lib/main.dart
-          sed -i "s|URL_PLACEHOLDER|${{ github.event.inputs.website_url }}|g" lib/main.dart
-
-          flutter pub get
-
-      - name: Build APK
-        run: |
+          export PATH="/opt/flutter/bin:$HOME/.pub-cache/bin:$PATH"
           cd web2app_temp
           flutter build apk --release
 
