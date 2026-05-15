@@ -1,4 +1,5 @@
 name: Build Flutter APK
+
 on:
   workflow_dispatch:
     inputs:
@@ -15,7 +16,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -23,48 +25,52 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      # FIX UTAMA: Gunakan cache untuk mempercepat, dan pastikan versi yang valid
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
-          flutter-version: '3.27.4'
+          flutter-version: '3.24.3'
           cache: true
 
       - name: Setup Android SDK
         run: |
-          sudo apt-get update
-          sudo apt-get install -y wget unzip zip
-          wget https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
-          unzip commandlinetools-linux-11076708_latest.zip
+          cd $HOME
           mkdir -p android-sdk/cmdline-tools
-          mv cmdline-tools android-sdk/cmdline-tools/latest
-          echo "$PWD/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
-          echo "ANDROID_HOME=$PWD/android-sdk" >> $GITHUB_ENV
-          yes | sdkmanager --licenses
-          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+          cd android-sdk
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          unzip -q commandlinetools-linux-11076708_latest.zip
+          mv cmdline-tools cmdline-tools-temp
+          mv cmdline-tools-temp cmdline-tools/latest
+          echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
+          export PATH="$PATH:$HOME/android-sdk/cmdline-tools/latest/bin"
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" > /dev/null 2>&1 || true
 
       - name: Create Flutter Project
         run: |
           flutter create --platforms=android --project-name=web2app web2app_temp
           cd web2app_temp
 
-          cat > pubspec.yaml << EOF
+          cat > pubspec.yaml << 'EOF'
           name: web2app
           description: Web2App Flutter
           publish_to: 'none'
           version: 1.0.0+1
+
           environment:
             sdk: '>=3.0.0 <4.0.0'
+
           dependencies:
             flutter:
               sdk: flutter
             webview_flutter: ^4.8.0
+
           flutter:
             uses-material-design: true
           EOF
 
-          cat > lib/main.dart << EOF
+          cat > lib/main.dart << 'EOF'
           import 'package:flutter/material.dart';
           import 'package:webview_flutter/webview_flutter.dart';
 
@@ -75,7 +81,7 @@ jobs:
             @override
             Widget build(BuildContext context) {
               return MaterialApp(
-                title: '${{ github.event.inputs.app_name }}',
+                title: 'APP_NAME_PLACEHOLDER',
                 debugShowCheckedModeBanner: false,
                 home: const WebViewScreen(),
               );
@@ -95,7 +101,7 @@ jobs:
               super.initState();
               controller = WebViewController()
                 ..setJavaScriptMode(JavaScriptMode.unrestricted)
-                ..loadRequest(Uri.parse('${{ github.event.inputs.website_url }}'));
+                ..loadRequest(Uri.parse('URL_PLACEHOLDER'));
             }
             @override
             Widget build(BuildContext context) {
@@ -105,6 +111,9 @@ jobs:
             }
           }
           EOF
+
+          sed -i "s|APP_NAME_PLACEHOLDER|${{ github.event.inputs.app_name }}|g" lib/main.dart
+          sed -i "s|URL_PLACEHOLDER|${{ github.event.inputs.website_url }}|g" lib/main.dart
 
           flutter pub get
 
