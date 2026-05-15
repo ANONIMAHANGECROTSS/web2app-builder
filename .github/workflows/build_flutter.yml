@@ -28,7 +28,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.22.0'
+          flutter-version: '3.27.4'
           channel: 'stable'
 
       - name: Setup Android SDK
@@ -41,24 +41,27 @@ jobs:
           echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
           echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
           yes | sdkmanager --licenses > /dev/null 2>&1 || true
-          sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.0" > /dev/null 2>&1 || true
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" > /dev/null 2>&1 || true
 
       - name: Create Flutter Project
         run: |
           flutter create --platforms=android --project-name=web2app web2app_temp
           cd web2app_temp
-          
+
           cat > pubspec.yaml << 'EOF'
           name: web2app
           description: Web2App Flutter
           publish_to: 'none'
           version: 1.0.0+1
+
           environment:
-            sdk: '>=3.0.0 <4.0.0'
+            sdk: '>=3.6.0 <4.0.0'
+
           dependencies:
             flutter:
               sdk: flutter
-            webview_flutter: ^4.13.0
+            webview_flutter: ^4.13.1
+
           flutter:
             uses-material-design: true
           EOF
