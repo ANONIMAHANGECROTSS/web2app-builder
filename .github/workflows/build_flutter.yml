@@ -1,5 +1,4 @@
 name: Build Flutter APK
-
 on:
   workflow_dispatch:
     inputs:
@@ -16,8 +15,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -25,43 +23,43 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
+      # FIX UTAMA: Gunakan cache untuk mempercepat, dan pastikan versi yang valid
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.22.4'
           channel: 'stable'
+          flutter-version: '3.27.4'
+          cache: true
 
       - name: Setup Android SDK
         run: |
-          cd $HOME
-          wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
-          unzip -q commandlinetools-linux-11076708_latest.zip
+          sudo apt-get update
+          sudo apt-get install -y wget unzip zip
+          wget https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          unzip commandlinetools-linux-11076708_latest.zip
           mkdir -p android-sdk/cmdline-tools
           mv cmdline-tools android-sdk/cmdline-tools/latest
-          echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
-          echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
-          yes | sdkmanager --licenses > /dev/null 2>&1 || true
-          sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.0" > /dev/null 2>&1 || true
+          echo "$PWD/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "ANDROID_HOME=$PWD/android-sdk" >> $GITHUB_ENV
+          yes | sdkmanager --licenses
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
       - name: Create Flutter Project
         run: |
           flutter create --platforms=android --project-name=web2app web2app_temp
           cd web2app_temp
 
-          cat > pubspec.yaml << 'EOF'
+          cat > pubspec.yaml << EOF
           name: web2app
           description: Web2App Flutter
           publish_to: 'none'
           version: 1.0.0+1
-
           environment:
-            sdk: '>=3.4.0 <4.0.0'
-
+            sdk: '>=3.0.0 <4.0.0'
           dependencies:
             flutter:
               sdk: flutter
             webview_flutter: ^4.8.0
-
           flutter:
             uses-material-design: true
           EOF
@@ -114,12 +112,6 @@ jobs:
         run: |
           cd web2app_temp
           flutter build apk --release
-
-      - name: Upload APK to Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-release
-          path: web2app_temp/build/app/outputs/flutter-apk/app-release.apk
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
