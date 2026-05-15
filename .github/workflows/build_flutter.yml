@@ -19,27 +19,37 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.22.0'
-          channel: 'stable'
-
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
 
+      - name: Setup Android SDK
+        run: |
+          wget https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          unzip commandlinetools-linux-11076708_latest.zip
+          mkdir -p android-sdk/cmdline-tools
+          mv cmdline-tools android-sdk/cmdline-tools/latest
+          echo "ANDROID_HOME=$PWD/android-sdk" >> $GITHUB_ENV
+          echo "$PWD/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          yes | sdkmanager --licenses
+          sdkmanager "platform-tools" "platforms;android-30" "build-tools;30.0.3"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.0'
+          channel: 'stable'
+
       - name: Create Flutter Project
         run: |
           flutter create --platforms=android --project-name=web2app web2app_temp
           cd web2app_temp
           
-          # Update pubspec.yaml
           cat > pubspec.yaml << 'EOF'
           name: web2app
-          description: Flutter Web2App
+          description: Web2App Flutter
           publish_to: 'none'
           version: 1.0.0+1
           environment:
@@ -52,7 +62,6 @@ jobs:
             uses-material-design: true
           EOF
 
-          # Create main.dart
           cat > lib/main.dart << EOF
           import 'package:flutter/material.dart';
           import 'package:webview_flutter/webview_flutter.dart';
