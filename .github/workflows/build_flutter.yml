@@ -90,7 +90,6 @@ jobs:
             webview_flutter: ^4.10.0
             connectivity_plus: ^6.0.3
             http: ^1.2.1
-            dart:convert
           EOF
           [ "$PERM" = "true" ] && echo "  permission_handler: ^10.4.0" >> pubspec.yaml
           [ "$LOCAL" = "true" ] && echo "  shared_preferences: ^2.2.3" >> pubspec.yaml
@@ -188,11 +187,10 @@ jobs:
             fi
           fi
 
-          # ===== GENERATE lib/main.dart via PYTHON (clean & complex) =====
+          # ===== GENERATE lib/main.dart via PYTHON =====
           python3 <<'PYEOF'
           import os, base64
 
-          # ── Read env ──
           url   = os.environ['URL']
           app   = os.environ['APP']
           color = os.environ['COLOR']
@@ -209,14 +207,14 @@ jobs:
           con   = os.environ.get('CON') == 'true'
           blu   = os.environ.get('BLU') == 'true'
 
-          # ── 1. URL OBFUSCATION (XOR + Base64, reconstructed runtime) ──
+          # 1. URL OBFUSCATION (XOR + Base64)
           key = "NanoSecureKey2024X7Z9Q2"
           enc = "".join(chr(ord(c) ^ ord(key[i % len(key)])) for i, c in enumerate(url))
           b64 = base64.b64encode(enc.encode()).decode()
           chunks = [b64[i:i+12] for i in range(0, len(b64), 12)]
           chunks_dart = " + ".join(f'"{c}"' for c in chunks)
 
-          # ── 2. Anti-WebView JS Shield ──
+          # 2. Anti-WebView JS Shield
           shield = '''
           (function(){
             function S(){
@@ -261,7 +259,6 @@ jobs:
           })();
           '''
 
-          # ── 3. Imports ──
           imports = [
               "import 'package:flutter/material.dart';",
               "import 'package:flutter/services.dart';",
@@ -274,7 +271,6 @@ jobs:
           if perm:   imports.append("import 'package:permission_handler/permission_handler.dart';")
           if local:  imports.append("import 'package:shared_preferences/shared_preferences.dart';")
 
-          # ── 4. Permission lines ──
           plines = []
           if perm:
               if cam: plines.append("await _requestSinglePerm(Permission.camera, 'Camera');")
@@ -285,7 +281,6 @@ jobs:
               if con: plines.append("await _requestSinglePerm(Permission.contacts, 'Kontak');")
               if blu: plines.append("await _requestSinglePerm(Permission.bluetooth, 'Bluetooth');")
 
-          # ── 5. System UI mode ──
           if fs == 'immersive':   chrome = 'SystemUiMode.immersiveSticky'
           elif fs == 'normal':    chrome = 'SystemUiMode.manual'
           else:                   chrome = 'SystemUiMode.edgeToEdge'
@@ -296,12 +291,10 @@ jobs:
           elif orient == 'landscape':
               orient_code = "SystemChrome.setPreferredOrientations([DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]);"
 
-          # ── 6. Build Dart ──
           lines = []
           lines.extend(imports)
           lines.append("")
 
-          # URL decryptor
           lines.append(f"""
           String _getTargetUrl() {{
             const _kKey = '{key}';
@@ -315,14 +308,12 @@ jobs:
           }}
           """)
 
-          # Shield
           lines.append(f"""
           const String _kShield = '''
           {shield}
           ''';
           """)
 
-          # Main
           lines.append(f"""
           void main() {{
             WidgetsFlutterBinding.ensureInitialized();
@@ -404,7 +395,7 @@ jobs:
               final status = await perm.status;
               if (status.isDenied || status.isRestricted) {{
                 final result = await perm.request();
-                debugPrint('$name: ${{result.toString()}}');
+                debugPrint(name + ': ' + result.toString());
               }}
             }}
 
@@ -524,7 +515,6 @@ jobs:
             }}
           """)
 
-          # ── 7. Loading style ──
           if load == 'premium':
               lines.append("""
             Widget _buildLoad() {
@@ -618,7 +608,6 @@ jobs:
             }
               """)
 
-          # ── 8. Error & Button widgets ──
           lines.append("""
             Widget _buildErr() {
               return Container(
