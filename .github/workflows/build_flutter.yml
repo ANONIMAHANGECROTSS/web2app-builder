@@ -86,9 +86,9 @@ jobs:
             connectivity_plus: ^6.0.3
             http: ^1.2.1
           EOF
-          [ "$PERM" = "true" ] && echo "    permission_handler: ^11.3.1" >> pubspec.yaml
-          [ "$LOCAL" = "true" ] && echo "    shared_preferences: ^2.2.3" >> pubspec.yaml
-          [ "$WAKE" = "true" ] && echo "    wakelock_plus: ^1.2.8" >> pubspec.yaml
+          [ "$PERM" = "true" ] && echo "  permission_handler: ^11.3.1" >> pubspec.yaml
+          [ "$LOCAL" = "true" ] && echo "  shared_preferences: ^2.2.3" >> pubspec.yaml
+          [ "$WAKE" = "true" ] && echo "  wakelock_plus: ^1.2.8" >> pubspec.yaml
           echo "flutter:" >> pubspec.yaml
           echo "  uses-material-design: true" >> pubspec.yaml
 
