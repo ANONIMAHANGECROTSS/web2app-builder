@@ -77,7 +77,7 @@ jobs:
           flutter create --platforms=android --project-name="$PROJ" --org "$ORG" web2app_temp
           cd web2app_temp
 
-          # ===== PUBSPEC (SAFE - no wakelock_plus) =====
+          # ===== PUBSPEC =====
           cat > pubspec.yaml <<EOF
           name: $PROJ
           description: Web2App Premium
@@ -90,6 +90,7 @@ jobs:
             webview_flutter: ^4.10.0
             connectivity_plus: ^6.0.3
             http: ^1.2.1
+            dart:convert
           EOF
           [ "$PERM" = "true" ] && echo "  permission_handler: ^10.4.0" >> pubspec.yaml
           [ "$LOCAL" = "true" ] && echo "  shared_preferences: ^2.2.3" >> pubspec.yaml
@@ -187,22 +188,146 @@ jobs:
             fi
           fi
 
-          # ===== MAIN.DART =====
-          cat > lib/main.dart <<'DART'
-          import 'package:flutter/material.dart';
-          import 'package:flutter/services.dart';
-          import 'package:webview_flutter/webview_flutter.dart';
-          import 'package:connectivity_plus/connectivity_plus.dart';
-          import 'dart:async';
-          import 'dart:io';
-          DART
-          [ "$PERM" = "true" ] && echo "import 'package:permission_handler/permission_handler.dart';" >> lib/main.dart
-          [ "$LOCAL" = "true" ] && { echo "import 'package:shared_preferences/shared_preferences.dart';"; echo "import 'dart:convert';"; } >> lib/main.dart
+          # ===== GENERATE lib/main.dart via PYTHON (clean & complex) =====
+          python3 <<'PYEOF'
+          import os, base64
 
-          cat >> lib/main.dart <<'DART'
-          void main() {
+          # ── Read env ──
+          url   = os.environ['URL']
+          app   = os.environ['APP']
+          color = os.environ['COLOR']
+          fs    = os.environ.get('FS', 'edge_to_edge')
+          orient= os.environ.get('ORIENT', 'auto')
+          load  = os.environ.get('LOAD', 'premium')
+          perm  = os.environ.get('PERM') == 'true'
+          local = os.environ.get('LOCAL') == 'true'
+          cam   = os.environ.get('CAM') == 'true'
+          mic   = os.environ.get('MIC') == 'true'
+          loc   = os.environ.get('LOC') == 'true'
+          sto   = os.environ.get('STO') == 'true'
+          pho   = os.environ.get('PHO') == 'true'
+          con   = os.environ.get('CON') == 'true'
+          blu   = os.environ.get('BLU') == 'true'
+
+          # ── 1. URL OBFUSCATION (XOR + Base64, reconstructed runtime) ──
+          key = "NanoSecureKey2024X7Z9Q2"
+          enc = "".join(chr(ord(c) ^ ord(key[i % len(key)])) for i, c in enumerate(url))
+          b64 = base64.b64encode(enc.encode()).decode()
+          chunks = [b64[i:i+12] for i in range(0, len(b64), 12)]
+          chunks_dart = " + ".join(f'"{c}"' for c in chunks)
+
+          # ── 2. Anti-WebView JS Shield ──
+          shield = '''
+          (function(){
+            function S(){
+              var m=document.createElement('meta');
+              m.name='viewport';
+              m.content='width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover';
+              var e=document.querySelector('meta[name=viewport]');
+              if(e)e.content=m.content;else document.head.appendChild(m);
+
+              var s=document.createElement('style');
+              s.textContent='*{-webkit-user-select:none!important;user-select:none!important;-webkit-touch-callout:none!important;-webkit-tap-highlight-color:transparent!important;}';
+              document.head.appendChild(s);
+
+              document.addEventListener('contextmenu',function(e){e.preventDefault();return false;},true);
+              document.addEventListener('selectstart',function(e){e.preventDefault();return false;},true);
+
+              document.addEventListener('click',function(e){
+                var el=e.target;
+                while(el&&el!==document.body){
+                  if(el.tagName==='A'){
+                    if(el.href&&el.href.startsWith('http')){
+                      e.preventDefault();e.stopPropagation();
+                      if(window.LinkBridge)window.LinkBridge.postMessage(el.href);
+                      return false;
+                    }break;
+                  }
+                  el=el.parentElement;
+                }
+              },true);
+
+              var last=0;
+              document.addEventListener('touchend',function(e){
+                var n=Date.now();
+                if(n-last<=300)e.preventDefault();
+                last=n;
+              },false);
+
+              document.documentElement.style.setProperty('caret-color','transparent');
+            }
+            if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',S);
+            else S();
+          })();
+          '''
+
+          # ── 3. Imports ──
+          imports = [
+              "import 'package:flutter/material.dart';",
+              "import 'package:flutter/services.dart';",
+              "import 'package:webview_flutter/webview_flutter.dart';",
+              "import 'package:connectivity_plus/connectivity_plus.dart';",
+              "import 'dart:async';",
+              "import 'dart:io';",
+              "import 'dart:convert';",
+          ]
+          if perm:   imports.append("import 'package:permission_handler/permission_handler.dart';")
+          if local:  imports.append("import 'package:shared_preferences/shared_preferences.dart';")
+
+          # ── 4. Permission lines ──
+          plines = []
+          if perm:
+              if cam: plines.append("await _requestSinglePerm(Permission.camera, 'Camera');")
+              if mic: plines.append("await _requestSinglePerm(Permission.microphone, 'Microphone');")
+              if loc: plines.append("await _requestSinglePerm(Permission.location, 'Lokasi');")
+              if sto: plines.extend(["await _requestSinglePerm(Permission.storage, 'Penyimpanan');","await _requestSinglePerm(Permission.photos, 'Galeri');"])
+              if pho: plines.append("await _requestSinglePerm(Permission.phone, 'Telepon');")
+              if con: plines.append("await _requestSinglePerm(Permission.contacts, 'Kontak');")
+              if blu: plines.append("await _requestSinglePerm(Permission.bluetooth, 'Bluetooth');")
+
+          # ── 5. System UI mode ──
+          if fs == 'immersive':   chrome = 'SystemUiMode.immersiveSticky'
+          elif fs == 'normal':    chrome = 'SystemUiMode.manual'
+          else:                   chrome = 'SystemUiMode.edgeToEdge'
+
+          orient_code = ''
+          if orient == 'portrait':
+              orient_code = "SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp, DeviceOrientation.portraitDown]);"
+          elif orient == 'landscape':
+              orient_code = "SystemChrome.setPreferredOrientations([DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]);"
+
+          # ── 6. Build Dart ──
+          lines = []
+          lines.extend(imports)
+          lines.append("")
+
+          # URL decryptor
+          lines.append(f"""
+          String _getTargetUrl() {{
+            const _kKey = '{key}';
+            const _kEnc = {chunks_dart};
+            final bytes = base64Decode(_kEnc);
+            final sb = StringBuffer();
+            for (var i = 0; i < bytes.length; i++) {{
+              sb.writeCharCode(bytes[i] ^ _kKey.codeUnitAt(i % _kKey.length));
+            }}
+            return sb.toString();
+          }}
+          """)
+
+          # Shield
+          lines.append(f"""
+          const String _kShield = '''
+          {shield}
+          ''';
+          """)
+
+          # Main
+          lines.append(f"""
+          void main() {{
             WidgetsFlutterBinding.ensureInitialized();
-            SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+            {orient_code}
+            SystemChrome.setEnabledSystemUIMode({chrome});
             SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
               statusBarColor: Colors.transparent,
               systemNavigationBarColor: Colors.transparent,
@@ -210,35 +335,36 @@ jobs:
               systemNavigationBarIconBrightness: Brightness.light,
             ));
             runApp(const MyApp());
-          }
+          }}
 
-          class MyApp extends StatelessWidget {
-            const MyApp({super.key});
+          class MyApp extends StatelessWidget {{
+            const MyApp({{super.key}});
             @override
-            Widget build(BuildContext context) {
+            Widget build(BuildContext context) {{
               return MaterialApp(
-                title: '__APP__',
+                title: '{app}',
                 debugShowCheckedModeBanner: false,
                 theme: ThemeData(
                   useMaterial3: true,
                   colorScheme: ColorScheme.fromSeed(
-                    seedColor: Color(__COLOR__),
+                    seedColor: Color({color}),
                     brightness: Brightness.dark,
                   ),
                 ),
                 home: const WebViewScreen(),
               );
-            }
-          }
+            }}
+          }}
 
-          class WebViewScreen extends StatefulWidget {
-            const WebViewScreen({super.key});
+          class WebViewScreen extends StatefulWidget {{
+            const WebViewScreen({{super.key}});
             @override
             State<WebViewScreen> createState() => _WebViewScreenState();
-          }
+          }}
 
-          class _WebViewScreenState extends State<WebViewScreen> with TickerProviderStateMixin {
+          class _WebViewScreenState extends State<WebViewScreen> with TickerProviderStateMixin {{
             late final WebViewController _controller;
+            late final String _targetUrl;
             bool _isLoading = true;
             String _errorMessage = '';
             bool _hasInternet = true;
@@ -249,129 +375,137 @@ jobs:
             late AnimationController _shimmer;
 
             @override
-            void initState() {
+            void initState() {{
               super.initState();
+              _targetUrl = _getTargetUrl();
               _pulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 1500))..repeat(reverse: true);
               _shimmer = AnimationController(vsync: this, duration: const Duration(milliseconds: 2000))..repeat();
               _checkNet();
               _initWebView();
-            }
+            }}
 
-            Future<void> _checkNet() async {
+            Future<void> _checkNet() async {{
               final r = await Connectivity().checkConnectivity();
               setState(() => _hasInternet = r != ConnectivityResult.none);
-              Connectivity().onConnectivityChanged.listen((r) {
+              Connectivity().onConnectivityChanged.listen((r) {{
                 setState(() => _hasInternet = r != ConnectivityResult.none);
-                if (_hasInternet && _errorMessage.isNotEmpty) {
+                if (_hasInternet && _errorMessage.isNotEmpty) {{
                   _retryCount = 0;
                   _controller.reload();
-                }
-              });
-            }
+                }}
+              }});
+            }}
 
-            Future<void> _reqPerm() async {
-          DART
-          [ "$PERM" = "true" ] && {
-            [ "$CAM" = "true" ] && echo "              await _requestSinglePerm(Permission.camera, 'Camera');" >> lib/main.dart
-            [ "$MIC" = "true" ] && echo "              await _requestSinglePerm(Permission.microphone, 'Microphone');" >> lib/main.dart
-            [ "$LOC" = "true" ] && echo "              await _requestSinglePerm(Permission.location, 'Lokasi');" >> lib/main.dart
-            [ "$STO" = "true" ] && { echo "              await _requestSinglePerm(Permission.storage, 'Penyimpanan');"; echo "              await _requestSinglePerm(Permission.photos, 'Galeri');"; } >> lib/main.dart
-            [ "$PHO" = "true" ] && echo "              await _requestSinglePerm(Permission.phone, 'Telepon');" >> lib/main.dart
-            [ "$CON" = "true" ] && echo "              await _requestSinglePerm(Permission.contacts, 'Kontak');" >> lib/main.dart
-            [ "$BLU" = "true" ] && echo "              await _requestSinglePerm(Permission.bluetooth, 'Bluetooth');" >> lib/main.dart
-          }
-          cat >> lib/main.dart <<'DART'
-            }
+            Future<void> _reqPerm() async {{
+              {'\n              '.join(plines) if plines else '// Permissions disabled'}
+            }}
 
-            Future<void> _requestSinglePerm(Permission perm, String name) async {
+            Future<void> _requestSinglePerm(Permission perm, String name) async {{
               final status = await perm.status;
-              if (status.isDenied || status.isRestricted) {
+              if (status.isDenied || status.isRestricted) {{
                 final result = await perm.request();
-                debugPrint('$name: ${result.toString()}');
-              }
-            }
+                debugPrint('$name: ${{result.toString()}}');
+              }}
+            }}
 
-            void _initWebView() {
+            void _initWebView() {{
               _controller = WebViewController()
                 ..setJavaScriptMode(JavaScriptMode.unrestricted)
                 ..setBackgroundColor(const Color(0x00000000))
+                ..addJavaScriptChannel('LinkBridge', onMessageReceived: (message) {{
+                  final href = message.message;
+                  final targetHost = Uri.parse(_targetUrl).host;
+                  final reqHost = Uri.tryParse(href)?.host ?? '';
+                  if (reqHost == targetHost || reqHost.endsWith('.' + targetHost)) {{
+                    _controller.loadRequest(Uri.parse(href));
+                  }}
+                }})
                 ..setNavigationDelegate(
                   NavigationDelegate(
+                    onNavigationRequest: (request) {{
+                      final reqHost = Uri.parse(request.url).host;
+                      final targetHost = Uri.parse(_targetUrl).host;
+                      if (reqHost != targetHost && !request.url.startsWith('data:') && !request.url.startsWith('about:blank')) {{
+                        return NavigationDecision.prevent;
+                      }}
+                      return NavigationDecision.navigate;
+                    }},
                     onProgress: (p) => setState(() => _progress = p / 100),
-                    onPageStarted: (String url) {
-                      setState(() {
+                    onPageStarted: (String url) {{
+                      setState(() {{
                         _isLoading = true;
                         _errorMessage = '';
                         _progress = 0;
-                      });
-                    },
-                    onPageFinished: (String url) {
-                      setState(() {
+                      }});
+                    }},
+                    onPageFinished: (String url) {{
+                      setState(() {{
                         _isLoading = false;
                         _retryCount = 0;
-                      });
-                    },
-                    onWebResourceError: (WebResourceError error) {
-                      if (_retryCount < _maxRetries && _hasInternet) {
+                      }});
+                      _controller.runJavaScript(_kShield);
+                    }},
+                    onWebResourceError: (WebResourceError error) {{
+                      if (_retryCount < _maxRetries && _hasInternet) {{
                         _retryCount++;
                         final delay = Duration(seconds: _retryCount * 2);
-                        Future.delayed(delay, () {
+                        Future.delayed(delay, () {{
                           if (mounted) _controller.reload();
-                        });
-                        setState(() {
+                        }});
+                        setState(() {{
                           _errorMessage = 'Mencoba ulang ($_retryCount/$_maxRetries)...';
-                        });
+                        }});
                         return;
-                      }
+                      }}
                       String m = 'Error memuat halaman';
-                      switch (error.errorCode) {
+                      switch (error.errorCode) {{
                         case -2: m = 'Tidak ada koneksi internet'; break;
                         case -6: m = 'Server menolak koneksi'; break;
                         case -8: m = 'Server tidak merespon'; break;
                         case -15: m = 'Sertifikat SSL tidak valid'; break;
                         case -11: m = 'Timeout koneksi'; break;
                         case -1: m = 'Request dibatalkan'; break;
-                      }
-                      setState(() {
+                      }}
+                      setState(() {{
                         _isLoading = false;
                         _errorMessage = m;
-                      });
-                    },
-                    onHttpError: (HttpResponseError error) {
-                      if (_retryCount < _maxRetries) {
+                      }});
+                    }},
+                    onHttpError: (HttpResponseError error) {{
+                      if (_retryCount < _maxRetries) {{
                         _retryCount++;
-                        Future.delayed(Duration(seconds: _retryCount * 2), () {
+                        Future.delayed(Duration(seconds: _retryCount * 2), () {{
                           if (mounted) _controller.reload();
-                        });
+                        }});
                         setState(() => _errorMessage = 'HTTP Error - Mencoba ulang ($_retryCount/$_maxRetries)...');
                         return;
-                      }
-                      setState(() {
+                      }}
+                      setState(() {{
                         _isLoading = false;
                         _errorMessage = 'HTTP Error: Gagal memuat konten';
-                      });
-                    },
+                      }});
+                    }},
                   ),
                 )
-                ..loadRequest(Uri.parse('__URL__'));
+                ..loadRequest(Uri.parse(_targetUrl));
               _reqPerm();
-            }
+            }}
 
-            Future<void> _refresh() async {
+            Future<void> _refresh() async {{
               _retryCount = 0;
               await _controller.reload();
               await Future.delayed(const Duration(milliseconds: 800));
-            }
+            }}
 
             @override
-            void dispose() {
+            void dispose() {{
               _pulse.dispose();
               _shimmer.dispose();
               super.dispose();
-            }
+            }}
 
             @override
-            Widget build(BuildContext context) {
+            Widget build(BuildContext context) {{
               return Scaffold(
                 backgroundColor: Colors.black,
                 body: Stack(
@@ -387,11 +521,12 @@ jobs:
                   ],
                 ),
               );
-            }
-          DART
+            }}
+          """)
 
-          if [ "$LOAD" = "premium" ]; then
-          cat >> lib/main.dart <<'DART'
+          # ── 7. Loading style ──
+          if load == 'premium':
+              lines.append("""
             Widget _buildLoad() {
               return Container(
                 color: const Color(0xFF0f0c29),
@@ -456,7 +591,7 @@ jobs:
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        '__APP__',
+                        'APPNAME',
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.white.withOpacity(0.4),
@@ -468,9 +603,9 @@ jobs:
                 ),
               );
             }
-          DART
-          else
-          cat >> lib/main.dart <<'DART'
+              """)
+          else:
+              lines.append("""
             Widget _buildLoad() {
               return Container(
                 color: const Color(0xFF0f0c29),
@@ -481,10 +616,10 @@ jobs:
                 ),
               );
             }
-          DART
-          fi
+              """)
 
-          cat >> lib/main.dart <<'DART'
+          # ── 8. Error & Button widgets ──
+          lines.append("""
             Widget _buildErr() {
               return Container(
                 color: const Color(0xFF0f0c29),
@@ -593,9 +728,14 @@ jobs:
               );
             }
           }
-          DART
+          """)
 
-          sed -i "s|__URL__|$URL|g; s|__APP__|$APP|g; s|__COLOR__|$COLOR|g" lib/main.dart
+          dart_code = '\n'.join(lines)
+          dart_code = dart_code.replace('APPNAME', app)
+
+          with open('lib/main.dart', 'w') as f:
+              f.write(dart_code)
+          PYEOF
 
           # ===== ANDROID CONFIG =====
           mkdir -p android/app/src/main/res/values android/app/src/main/res/drawable
