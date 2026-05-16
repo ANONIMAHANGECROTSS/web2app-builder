@@ -3,19 +3,21 @@ name: 🚀 Flutter Web2App Premium Builder
 on:
   workflow_dispatch:
     inputs:
-      website_url: { description: '🌐 URL', required: true, type: string }
-      app_name: { description: '📱 Nama App', required: true, type: string }
-      primary_color: { description: '🎨 Warna', required: true, type: string, default: '0xFF667EEA' }
-      fullscreen_mode: { description: '⛶ Fullscreen', required: true, type: choice, options: [immersive, edge_to_edge, normal], default: edge_to_edge }
-      orientation: { description: '📐 Orientasi', required: true, type: choice, options: [auto, portrait, landscape], default: auto }
-      loading_style: { description: '✨ Loading', required: true, type: choice, options: [premium, minimal], default: premium }
-      enable_pull_refresh: { description: '🔄 Pull Refresh', required: true, type: boolean, default: true }
-      enable_localstorage: { description: '💾 LocalStorage', required: true, type: boolean, default: true }
-      enable_wakelock: { description: '☀️ Wakelock', required: true, type: boolean, default: false }
-      enable_permissions: { description: '🔐 Permission', required: true, type: boolean, default: true }
+      website_url: { description: '🌐 URL Website', required: true, type: string }
+      app_name: { description: '📱 Nama Aplikasi', required: true, type: string }
+      package_name: { description: '📦 Package Name (contoh: com.yourname.app)', required: true, type: string, default: 'com.web2app.app' }
+      primary_color: { description: '🎨 Primary Color (0xFF667EEA)', required: true, type: string, default: '0xFF667EEA' }
+      icon_url: { description: '🖼️ Icon URL (kosong = default)', required: false, type: string, default: '' }
+      fullscreen_mode: { description: '⛶ Fullscreen Mode', required: true, type: choice, options: [immersive, edge_to_edge, normal], default: edge_to_edge }
+      orientation: { description: '📐 Orientasi Layar', required: true, type: choice, options: [auto, portrait, landscape], default: auto }
+      loading_style: { description: '✨ Gaya Loading', required: true, type: choice, options: [premium, minimal], default: premium }
+      enable_pull_refresh: { description: '🔄 Pull to Refresh', required: true, type: boolean, default: true }
+      enable_localstorage: { description: '💾 LocalStorage Bridge', required: true, type: boolean, default: true }
+      enable_wakelock: { description: '☀️ Keep Screen On', required: true, type: boolean, default: false }
+      enable_permissions: { description: '🔐 Permission Handler', required: true, type: boolean, default: true }
       perm_camera: { description: '📷 Camera', required: true, type: boolean, default: true }
-      perm_mic: { description: '🎙️ Mic', required: true, type: boolean, default: false }
-      perm_location: { description: '📍 GPS', required: true, type: boolean, default: true }
+      perm_mic: { description: '🎙️ Microphone', required: true, type: boolean, default: false }
+      perm_location: { description: '📍 Location', required: true, type: boolean, default: true }
       perm_storage: { description: '📂 Storage', required: true, type: boolean, default: true }
       perm_phone: { description: '📞 Phone', required: true, type: boolean, default: false }
       perm_contacts: { description: '👥 Contacts', required: true, type: boolean, default: false }
@@ -29,7 +31,9 @@ jobs:
     env:
       URL: ${{ github.event.inputs.website_url }}
       APP: ${{ github.event.inputs.app_name }}
+      PKG: ${{ github.event.inputs.package_name }}
       COLOR: ${{ github.event.inputs.primary_color }}
+      ICON: ${{ github.event.inputs.icon_url }}
       FS: ${{ github.event.inputs.fullscreen_mode }}
       ORIENT: ${{ github.event.inputs.orientation }}
       LOAD: ${{ github.event.inputs.loading_style }}
@@ -69,12 +73,16 @@ jobs:
 
       - name: 🏗️ Generate Flutter Project
         run: |
-          flutter create --platforms=android --project-name=web2app --org com.web2app web2app_temp
+          # Extract org and project name from package
+          ORG=$(echo "$PKG" | sed 's/\.[^.]*$//')
+          PROJ=$(echo "$PKG" | awk -F. '{print $NF}')
+          
+          flutter create --platforms=android --project-name="$PROJ" --org "$ORG" web2app_temp
           cd web2app_temp
 
           # ===== PUBSPEC =====
           cat > pubspec.yaml <<EOF
-          name: web2app
+          name: $PROJ
           description: Web2App Premium
           publish_to: 'none'
           version: 1.0.0+1
@@ -92,6 +100,23 @@ jobs:
           echo "flutter:" >> pubspec.yaml
           echo "  uses-material-design: true" >> pubspec.yaml
 
+          # ===== DOWNLOAD & SET ICON =====
+          if [ -n "$ICON" ]; then
+            mkdir -p android/app/src/main/res/mipmap-xxxhdpi android/app/src/main/res/mipmap-xxhdpi android/app/src/main/res/mipmap-xhdpi android/app/src/main/res/mipmap-hdpi android/app/src/main/res/mipmap-mdpi
+            curl -sL "$ICON" -o /tmp/icon.png || true
+            if [ -f /tmp/icon.png ]; then
+              # Convert to proper sizes using ImageMagick or fallback
+              for size in 192 144 96 72 48; do
+                dir="android/app/src/main/res/mipmap-xxxhdpi"
+                [ "$size" = "144" ] && dir="android/app/src/main/res/mipmap-xxhdpi"
+                [ "$size" = "96" ] && dir="android/app/src/main/res/mipmap-xhdpi"
+                [ "$size" = "72" ] && dir="android/app/src/main/res/mipmap-hdpi"
+                [ "$size" = "48" ] && dir="android/app/src/main/res/mipmap-mdpi"
+                cp /tmp/icon.png "$dir/ic_launcher.png" 2>/dev/null || true
+              done
+            fi
+          fi
+
           # ===== MAIN.DART HEADER =====
           cat > lib/main.dart <<'DART'
           import 'package:flutter/material.dart';
@@ -99,6 +124,7 @@ jobs:
           import 'package:webview_flutter/webview_flutter.dart';
           import 'package:connectivity_plus/connectivity_plus.dart';
           import 'dart:async';
+          import 'dart:io';
           DART
           [ "$PERM" = "true" ] && echo "import 'package:permission_handler/permission_handler.dart';" >> lib/main.dart
           [ "$LOCAL" = "true" ] && { echo "import 'package:shared_preferences/shared_preferences.dart';"; echo "import 'dart:convert';"; } >> lib/main.dart
@@ -149,6 +175,8 @@ jobs:
             String _errorMessage = '';
             bool _hasInternet = true;
             double _progress = 0;
+            int _retryCount = 0;
+            static const int _maxRetries = 3;
             late AnimationController _pulse;
             late AnimationController _shimmer;
 
@@ -170,56 +198,115 @@ jobs:
               setState(() => _hasInternet = r != ConnectivityResult.none);
               Connectivity().onConnectivityChanged.listen((r) {
                 setState(() => _hasInternet = r != ConnectivityResult.none);
-                if (_hasInternet && _errorMessage.isNotEmpty) _controller.reload();
+                if (_hasInternet && _errorMessage.isNotEmpty) {
+                  _retryCount = 0;
+                  _controller.reload();
+                }
               });
             }
 
             Future<void> _reqPerm() async {
           DART
           [ "$PERM" = "true" ] && {
-            [ "$CAM" = "true" ] && echo "              await Permission.camera.request();" >> lib/main.dart
-            [ "$MIC" = "true" ] && echo "              await Permission.microphone.request();" >> lib/main.dart
-            [ "$LOC" = "true" ] && echo "              await Permission.location.request();" >> lib/main.dart
-            [ "$STO" = "true" ] && { echo "              await Permission.storage.request();"; echo "              await Permission.photos.request();"; } >> lib/main.dart
-            [ "$PHO" = "true" ] && echo "              await Permission.phone.request();" >> lib/main.dart
-            [ "$CON" = "true" ] && echo "              await Permission.contacts.request();" >> lib/main.dart
-            [ "$BLU" = "true" ] && echo "              await Permission.bluetooth.request();" >> lib/main.dart
+            [ "$CAM" = "true" ] && echo "              await _requestSinglePerm(Permission.camera, 'Camera', 'Aplikasi membutuhkan akses kamera');" >> lib/main.dart
+            [ "$MIC" = "true" ] && echo "              await _requestSinglePerm(Permission.microphone, 'Microphone', 'Aplikasi membutuhkan akses mikrofon');" >> lib/main.dart
+            [ "$LOC" = "true" ] && echo "              await _requestSinglePerm(Permission.location, 'Lokasi', 'Aplikasi membutuhkan akses lokasi');" >> lib/main.dart
+            [ "$STO" = "true" ] && { echo "              await _requestSinglePerm(Permission.storage, 'Penyimpanan', 'Aplikasi membutuhkan akses penyimpanan');"; echo "              await _requestSinglePerm(Permission.photos, 'Foto', 'Aplikasi membutuhkan akses galeri');"; } >> lib/main.dart
+            [ "$PHO" = "true" ] && echo "              await _requestSinglePerm(Permission.phone, 'Telepon', 'Aplikasi membutuhkan akses telepon');" >> lib/main.dart
+            [ "$CON" = "true" ] && echo "              await _requestSinglePerm(Permission.contacts, 'Kontak', 'Aplikasi membutuhkan akses kontak');" >> lib/main.dart
+            [ "$BLU" = "true" ] && echo "              await _requestSinglePerm(Permission.bluetooth, 'Bluetooth', 'Aplikasi membutuhkan akses bluetooth');" >> lib/main.dart
           }
           cat >> lib/main.dart <<'DART'
+            }
+
+            Future<void> _requestSinglePerm(Permission perm, String name, String reason) async {
+              final status = await perm.status;
+              if (status.isDenied) {
+                final result = await perm.request();
+                if (result.isPermanentlyDenied) {
+                  debugPrint('$name: Permanently denied');
+                }
+              }
             }
 
             void _initWebView() {
               _controller = WebViewController()
                 ..setJavaScriptMode(JavaScriptMode.unrestricted)
                 ..setBackgroundColor(const Color(0x00000000))
-                ..setNavigationDelegate(NavigationDelegate(
-                  onProgress: (p) => setState(() => _progress = p / 100),
-                  onPageStarted: (_) => setState(() { _isLoading = true; _errorMessage = ''; _progress = 0; }),
-                  onPageFinished: (_) => setState(() => _isLoading = false),
-                  onWebResourceError: (e) {
-                    String m = 'Error memuat halaman';
-                    switch (e.errorCode) {
-                      case -2: m = 'Tidak ada koneksi internet'; break;
-                      case -6: m = 'Server menolak koneksi'; break;
-                      case -8: m = 'Server tidak merespon'; break;
-                      case -15: m = 'Sertifikat SSL tidak valid'; break;
-                      case -11: m = 'Timeout koneksi'; break;
-                    }
-                    setState(() { _isLoading = false; _errorMessage = m; });
-                  },
-                  onHttpError: (_) => setState(() { _isLoading = false; _errorMessage = 'HTTP Error'; }),
-                ))
+                ..setNavigationDelegate(
+                  NavigationDelegate(
+                    onProgress: (p) => setState(() => _progress = p / 100),
+                    onPageStarted: (String url) {
+                      setState(() {
+                        _isLoading = true;
+                        _errorMessage = '';
+                        _progress = 0;
+                      });
+                    },
+                    onPageFinished: (String url) {
+                      setState(() {
+                        _isLoading = false;
+                        _retryCount = 0;
+                      });
+                    },
+                    onWebResourceError: (WebResourceError error) {
+                      if (_retryCount < _maxRetries && _hasInternet) {
+                        _retryCount++;
+                        final delay = Duration(seconds: _retryCount * 2);
+                        Future.delayed(delay, () {
+                          if (mounted) _controller.reload();
+                        });
+                        setState(() {
+                          _errorMessage = 'Mencoba ulang ($_retryCount/$_maxRetries)...';
+                        });
+                        return;
+                      }
+                      String m = 'Error memuat halaman';
+                      switch (error.errorCode) {
+                        case -2: m = 'Tidak ada koneksi internet'; break;
+                        case -6: m = 'Server menolak koneksi'; break;
+                        case -8: m = 'Server tidak merespon'; break;
+                        case -15: m = 'Sertifikat SSL tidak valid'; break;
+                        case -11: m = 'Timeout koneksi'; break;
+                        case -1: m = 'Request dibatalkan'; break;
+                      }
+                      setState(() {
+                        _isLoading = false;
+                        _errorMessage = m;
+                      });
+                    },
+                    onHttpError: (HttpResponseError error) {
+                      if (_retryCount < _maxRetries) {
+                        _retryCount++;
+                        Future.delayed(Duration(seconds: _retryCount * 2), () {
+                          if (mounted) _controller.reload();
+                        });
+                        setState(() => _errorMessage = 'HTTP Error - Mencoba ulang ($_retryCount/$_maxRetries)...');
+                        return;
+                      }
+                      setState(() {
+                        _isLoading = false;
+                        _errorMessage = 'HTTP Error: Gagal memuat konten';
+                      });
+                    },
+                  ),
+                )
                 ..loadRequest(Uri.parse('__URL__'));
               _reqPerm();
             }
 
             Future<void> _refresh() async {
+              _retryCount = 0;
               await _controller.reload();
               await Future.delayed(const Duration(milliseconds: 800));
             }
 
             @override
-            void dispose() { _pulse.dispose(); _shimmer.dispose(); super.dispose(); }
+            void dispose() {
+              _pulse.dispose();
+              _shimmer.dispose();
+              super.dispose();
+            }
 
             @override
             Widget build(BuildContext context) {
@@ -227,7 +314,12 @@ jobs:
                 backgroundColor: Colors.black,
                 body: Stack(
                   children: [
-                    SafeArea(top: false, bottom: false, maintainBottomViewPadding: true, child: WebViewWidget(controller: _controller)),
+                    SafeArea(
+                      top: false,
+                      bottom: false,
+                      maintainBottomViewPadding: true,
+                      child: WebViewWidget(controller: _controller),
+                    ),
                     if (_isLoading) _buildLoad(),
                     if (_errorMessage.isNotEmpty) _buildErr(),
                   ],
@@ -254,16 +346,32 @@ jobs:
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             gradient: const SweepGradient(colors: [Color(0xFF667eea), Color(0xFF764ba2), Color(0xFF667eea)]),
-                            boxShadow: [BoxShadow(color: const Color(0xFF667eea).withOpacity(0.5 + _pulse.value * 0.3), blurRadius: 30 + _pulse.value * 20, spreadRadius: 2)],
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF667eea).withOpacity(0.5 + _pulse.value * 0.3),
+                                blurRadius: 30 + _pulse.value * 20,
+                                spreadRadius: 2,
+                              ),
+                            ],
                           ),
-                          child: const Center(child: Icon(Icons.touch_app, color: Colors.white, size: 32)),
+                          child: const Center(
+                            child: Icon(Icons.touch_app, color: Colors.white, size: 32),
+                          ),
                         ),
                       ),
                       const SizedBox(height: 40),
-                      SizedBox(width: 200, height: 4, child: ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: LinearProgressIndicator(value: _progress, backgroundColor: Colors.white10, valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF667eea))),
-                      )),
+                      SizedBox(
+                        width: 200,
+                        height: 4,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: LinearProgressIndicator(
+                            value: _progress,
+                            backgroundColor: Colors.white10,
+                            valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF667eea)),
+                          ),
+                        ),
+                      ),
                       const SizedBox(height: 24),
                       AnimatedBuilder(
                         animation: _shimmer,
@@ -274,11 +382,26 @@ jobs:
                             begin: Alignment(-1.0 + _shimmer.value * 2.0, 0),
                             end: Alignment(_shimmer.value * 2.0, 0),
                           ).createShader(b),
-                          child: const Text('MEMUAT KONTEN...', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, letterSpacing: 3, color: Colors.white)),
+                          child: const Text(
+                            'MEMUAT KONTEN...',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 3,
+                              color: Colors.white,
+                            ),
+                          ),
                         ),
                       ),
                       const SizedBox(height: 8),
-                      Text('__APP__', style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.4), letterSpacing: 1)),
+                      Text(
+                        '__APP__',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.white.withOpacity(0.4),
+                          letterSpacing: 1,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -290,7 +413,11 @@ jobs:
             Widget _buildLoad() {
               return Container(
                 color: const Color(0xFF0f0c29),
-                child: const Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF667eea)))),
+                child: const Center(
+                  child: CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF667eea)),
+                  ),
+                ),
               );
             }
           DART
@@ -307,18 +434,55 @@ jobs:
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(!_hasInternet ? Icons.wifi_off_rounded : Icons.error_outline_rounded, size: 72, color: !_hasInternet ? Colors.orangeAccent : Colors.redAccent),
+                        Icon(
+                          !_hasInternet ? Icons.wifi_off_rounded : Icons.error_outline_rounded,
+                          size: 72,
+                          color: !_hasInternet ? Colors.orangeAccent : Colors.redAccent,
+                        ),
                         const SizedBox(height: 20),
-                        Text(!_hasInternet ? 'KONEKSI TERPUTUS' : 'TERJADI KESALAHAN', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 1)),
+                        Text(
+                          !_hasInternet ? 'KONEKSI TERPUTUS' : 'TERJADI KESALAHAN',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            letterSpacing: 1,
+                          ),
+                        ),
                         const SizedBox(height: 12),
-                        Text(_errorMessage, textAlign: TextAlign.center, style: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.6), height: 1.5)),
+                        Text(
+                          _errorMessage,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.white.withOpacity(0.6),
+                            height: 1.5,
+                          ),
+                        ),
                         const SizedBox(height: 32),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            _btn(Icons.refresh_rounded, 'COBA LAGI', () { setState(() { _errorMessage = ''; _isLoading = true; }); _controller.reload(); }),
+                            _btn(
+                              Icons.refresh_rounded,
+                              'COBA LAGI',
+                              () {
+                                setState(() {
+                                  _errorMessage = '';
+                                  _isLoading = true;
+                                  _retryCount = 0;
+                                });
+                                _controller.reload();
+                              },
+                            ),
                             if (!_hasInternet) const SizedBox(width: 16),
-                            if (!_hasInternet) _btn(Icons.wifi, 'CEK KONEKSI', _checkNet, color: Colors.orangeAccent),
+                            if (!_hasInternet)
+                              _btn(
+                                Icons.wifi,
+                                'CEK KONEKSI',
+                                _checkNet,
+                                color: Colors.orangeAccent,
+                              ),
                           ],
                         ),
                       ],
@@ -337,15 +501,33 @@ jobs:
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                     decoration: BoxDecoration(
-                      gradient: LinearGradient(colors: [color, color.withOpacity(0.7)]),
+                      gradient: LinearGradient(
+                        colors: [color, color.withOpacity(0.7)],
+                      ),
                       borderRadius: BorderRadius.circular(16),
-                      boxShadow: [BoxShadow(color: color.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 4))],
+                      boxShadow: [
+                        BoxShadow(
+                          color: color.withOpacity(0.3),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
                     ),
-                    child: Row(mainAxisSize: MainAxisSize.min, children: [
-                      Icon(i, color: Colors.white, size: 18),
-                      const SizedBox(width: 8),
-                      Text(l, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13)),
-                    ]),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(i, color: Colors.white, size: 18),
+                        const SizedBox(width: 8),
+                        Text(
+                          l,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               );
@@ -388,9 +570,11 @@ jobs:
           </layer-list>
           EOF
 
-          mkdir -p android/app/src/main/kotlin/com/web2app/web2app
-          cat > android/app/src/main/kotlin/com/web2app/web2app/MainActivity.kt <<'EOF'
-          package com.web2app.web2app
+          # ===== MAINACTIVITY.KT =====
+          PKG_PATH=$(echo "$PKG" | tr '.' '/')
+          mkdir -p "android/app/src/main/kotlin/$PKG_PATH"
+          cat > "android/app/src/main/kotlin/$PKG_PATH/MainActivity.kt" <<EOF
+          package $PKG
           import android.os.Bundle
           import android.view.WindowManager
           import io.flutter.embedding.android.FlutterActivity
@@ -417,7 +601,7 @@ jobs:
           [ "$CAM" = "true" ] && echo '    <uses-permission android:name="android.permission.CAMERA"/>' >> android/app/src/main/AndroidManifest.xml
           [ "$MIC" = "true" ] && echo '    <uses-permission android:name="android.permission.RECORD_AUDIO"/>' >> android/app/src/main/AndroidManifest.xml
           [ "$LOC" = "true" ] && { echo '    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>'; echo '    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>'; } >> android/app/src/main/AndroidManifest.xml
-          [ "$STO" = "true" ] && { echo '    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>'; echo '    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>'; } >> android/app/src/main/AndroidManifest.xml
+          [ "$STO" = "true" ] && { echo '    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>'; echo '    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>'; echo '    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>'; } >> android/app/src/main/AndroidManifest.xml
           [ "$PHO" = "true" ] && echo '    <uses-permission android:name="android.permission.READ_PHONE_STATE"/>' >> android/app/src/main/AndroidManifest.xml
           [ "$CON" = "true" ] && echo '    <uses-permission android:name="android.permission.READ_CONTACTS"/>' >> android/app/src/main/AndroidManifest.xml
           [ "$BLU" = "true" ] && { echo '    <uses-permission android:name="android.permission.BLUETOOTH"/>'; echo '    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"/>'; } >> android/app/src/main/AndroidManifest.xml
