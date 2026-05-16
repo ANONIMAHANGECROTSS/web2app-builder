@@ -28,20 +28,13 @@ jobs:
           java-version: '17'
 
       - name: Setup Flutter
-        run: |
-          git clone https://github.com/flutter/flutter.git --depth 1 -b stable /opt/flutter
-          echo "/opt/flutter/bin" >> $GITHUB_PATH
-          echo "$HOME/.pub-cache/bin" >> $GITHUB_PATH
-
-      - name: Verify Flutter
-        run: |
-          export PATH="/opt/flutter/bin:$HOME/.pub-cache/bin:$PATH"
-          flutter precache
-          flutter doctor -v
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.3'
+          channel: 'stable'
 
       - name: Setup Android SDK
         run: |
-          export PATH="/opt/flutter/bin:$PATH"
           mkdir -p $HOME/android-sdk/cmdline-tools
           cd $HOME/android-sdk
           wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
@@ -55,9 +48,8 @@ jobs:
           yes | sdkmanager --licenses > /dev/null 2>&1
           sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
-      - name: Create Project
+      - name: Create Flutter Project
         run: |
-          export PATH="/opt/flutter/bin:$HOME/.pub-cache/bin:$PATH"
           flutter create --platforms=android --project-name=web2app web2app_temp
           cd web2app_temp
 
@@ -102,13 +94,29 @@ jobs:
 
           class _WebViewScreenState extends State<WebViewScreen> {
             late final WebViewController controller;
+
             @override
             void initState() {
               super.initState();
+
               controller = WebViewController()
                 ..setJavaScriptMode(JavaScriptMode.unrestricted)
-                ..loadRequest(Uri.parse('URL_PLACEHOLDER'));
+                ..setBackgroundColor(const Color(0x00000000))
+                ..setNavigationDelegate(
+                  NavigationDelegate(
+                    onPageFinished: (url) {
+                      // Optional: log
+                    },
+                    onWebResourceError: (error) {
+                      debugPrint('WebView error: ${error.errorCode}');
+                    },
+                  ),
+                )
+                ..loadRequest(
+                  Uri.parse('URL_PLACEHOLDER'),
+                );
             }
+
             @override
             Widget build(BuildContext context) {
               return Scaffold(
@@ -125,7 +133,6 @@ jobs:
 
       - name: Build APK
         run: |
-          export PATH="/opt/flutter/bin:$HOME/.pub-cache/bin:$PATH"
           cd web2app_temp
           flutter build apk --release
 
