@@ -56,7 +56,7 @@ jobs:
 
           cat > pubspec.yaml << 'EOF'
           name: web2app
-          description: Web2App Flutter - Full Fix
+          description: Web2App Flutter
           publish_to: 'none'
           version: 1.0.0+1
           environment:
@@ -64,12 +64,13 @@ jobs:
           dependencies:
             flutter:
               sdk: flutter
-            webview_flutter: ^4.4.0
+            webview_flutter: ^4.10.0
             connectivity_plus: ^6.0.3
           flutter:
             uses-material-design: true
           EOF
 
+          # MAIN.DART YANG BENER (KODE DI ATAS)
           cat > lib/main.dart << 'EOF'
           import 'package:flutter/material.dart';
           import 'package:webview_flutter/webview_flutter.dart';
@@ -127,9 +128,6 @@ jobs:
               _controller = WebViewController()
                 ..setJavaScriptMode(JavaScriptMode.unrestricted)
                 ..setBackgroundColor(const Color(0x00000000))
-                ..setUserAgentString(
-                  'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36'
-                )
                 ..setNavigationDelegate(
                   NavigationDelegate(
                     onPageStarted: (String url) {
@@ -174,11 +172,6 @@ jobs:
                 )
                 ..loadRequest(
                   Uri.parse('URL_PLACEHOLDER'),
-                  headers: {
-                    'Cache-Control': 'no-cache, no-store, must-revalidate',
-                    'Pragma': 'no-cache',
-                    'Expires': '0',
-                  },
                 );
             }
 
@@ -239,7 +232,7 @@ jobs:
                                     if (!_hasInternet)
                                       ElevatedButton.icon(
                                         onPressed: _checkConnectivity,
-                                        icon: const Icon(Icons.signal_wifi_4),
+                                        icon: const Icon(Icons.wifi),
                                         label: const Text('Cek Koneksi'),
                                       ),
                                   ],
