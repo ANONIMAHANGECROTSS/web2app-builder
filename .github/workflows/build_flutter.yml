@@ -12,41 +12,12 @@ on:
         required: true
         type: string
       package_name:
-        description: 'Package Name (contoh: com.example.app)'
+        description: 'Package Name'
         required: false
         type: string
         default: 'com.web2app.generated'
-      
-      # Features
-      pull_to_refresh:
-        description: 'Enable Pull to Refresh'
-        required: false
-        type: boolean
-        default: true
-      enable_local_storage:
-        description: 'Enable Local Storage'
-        required: false
-        type: boolean
-        default: true
-      enable_file_upload:
-        description: 'Enable File Upload'
-        required: false
-        type: boolean
-        default: true
-      enable_geolocation:
-        description: 'Enable Geolocation'
-        required: false
-        type: boolean
-        default: false
-      enable_notifications:
-        description: 'Enable Push Notifications'
-        required: false
-        type: boolean
-        default: false
-      
-      # Icon (Base64)
       app_icon_base64:
-        description: 'App Icon (Base64 encoded PNG, max 1MB)'
+        description: 'App Icon Base64'
         required: false
         type: string
         default: ''
@@ -70,7 +41,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
-          flutter-version: '3.24.3'
+          flutter-version: '3.22.4'
           cache: true
 
       - name: Setup Android SDK
@@ -88,29 +59,15 @@ jobs:
           yes | sdkmanager --licenses > /dev/null 2>&1
           sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
-      - name: Decode App Icon
-        if: ${{ github.event.inputs.app_icon_base64 != '' }}
-        run: |
-          echo "${{ github.event.inputs.app_icon_base64 }}" | base64 -d > app_icon.png
-          mkdir -p web2app_temp/android/app/src/main/res/mipmap-hdpi
-          mkdir -p web2app_temp/android/app/src/main/res/mipmap-mdpi
-          mkdir -p web2app_temp/android/app/src/main/res/mipmap-xhdpi
-          mkdir -p web2app_temp/android/app/src/main/res/mipmap-xxhdpi
-          mkdir -p web2app_temp/android/app/src/main/res/mipmap-xxxhdpi
-          convert app_icon.png -resize 72x72 web2app_temp/android/app/src/main/res/mipmap-hdpi/ic_launcher.png
-          convert app_icon.png -resize 48x48 web2app_temp/android/app/src/main/res/mipmap-mdpi/ic_launcher.png
-          convert app_icon.png -resize 96x96 web2app_temp/android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
-          convert app_icon.png -resize 144x144 web2app_temp/android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-          convert app_icon.png -resize 192x192 web2app_temp/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-
       - name: Create Flutter Project
         run: |
-          flutter create --platforms=android --project-name=web2app web2app_temp
-          cd web2app_temp
+          # Buat project di folder terpisah
+          flutter create --platforms=android --project-name=web2app_temp /tmp/web2app_temp
+          cd /tmp/web2app_temp
 
           cat > pubspec.yaml << 'EOF'
-          name: web2app
-          description: Web2App Flutter - Premium Edition
+          name: web2app_temp
+          description: Web2App Flutter
           publish_to: 'none'
           version: 1.0.0+1
           environment:
@@ -118,17 +75,14 @@ jobs:
           dependencies:
             flutter:
               sdk: flutter
-            webview_flutter: ^4.10.0
-            connectivity_plus: ^6.0.3
+            webview_flutter: ^4.4.0
           flutter:
             uses-material-design: true
           EOF
 
           cat > lib/main.dart << 'EOF'
-          import 'dart:async';
           import 'package:flutter/material.dart';
           import 'package:webview_flutter/webview_flutter.dart';
-          import 'package:connectivity_plus/connectivity_plus.dart';
 
           void main() => runApp(const MyApp());
 
@@ -139,10 +93,6 @@ jobs:
               return MaterialApp(
                 title: 'APP_NAME_PLACEHOLDER',
                 debugShowCheckedModeBanner: false,
-                theme: ThemeData(
-                  scaffoldBackgroundColor: Colors.black,
-                  primarySwatch: Colors.blue,
-                ),
                 home: const WebViewScreen(),
               );
             }
@@ -154,270 +104,48 @@ jobs:
             State<WebViewScreen> createState() => _WebViewScreenState();
           }
 
-          class _WebViewScreenState extends State<WebViewScreen> with WidgetsBindingObserver {
+          class _WebViewScreenState extends State<WebViewScreen> {
             late final WebViewController _controller;
             bool _isLoading = true;
-            String _errorMessage = '';
-            bool _hasInternet = true;
-            double _progress = 0.0;
-            final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
             @override
             void initState() {
               super.initState();
-              WidgetsBinding.instance.addObserver(this);
-              _checkConnectivity();
               _initWebView();
-            }
-
-            @override
-            void dispose() {
-              WidgetsBinding.instance.removeObserver(this);
-              super.dispose();
-            }
-
-            @override
-            void didChangeAppLifecycleState(AppLifecycleState state) {
-              if (state == AppLifecycleState.resumed) {
-                _controller.reload();
-              }
-            }
-
-            Future<void> _checkConnectivity() async {
-              final result = await Connectivity().checkConnectivity();
-              setState(() {
-                _hasInternet = result != ConnectivityResult.none;
-              });
-              Connectivity().onConnectivityChanged.listen((result) {
-                setState(() {
-                  _hasInternet = result != ConnectivityResult.none;
-                });
-                if (_hasInternet && _errorMessage.isNotEmpty) {
-                  _controller.reload();
-                }
-              });
             }
 
             void _initWebView() {
               _controller = WebViewController()
                 ..setJavaScriptMode(JavaScriptMode.unrestricted)
-                ..setBackgroundColor(const Color(0xFF000000))
-                ..enableZoom(true)
                 ..setNavigationDelegate(
                   NavigationDelegate(
                     onPageStarted: (String url) {
-                      setState(() {
-                        _isLoading = true;
-                        _errorMessage = '';
-                        _progress = 0.0;
-                      });
-                    },
-                    onProgress: (int progress) {
-                      setState(() {
-                        _progress = progress / 100.0;
-                      });
+                      setState(() => _isLoading = true);
                     },
                     onPageFinished: (String url) {
                       setState(() => _isLoading = false);
                     },
-                    onWebResourceError: (WebResourceError error) {
-                      String msg = '';
-                      switch (error.errorCode) {
-                        case -2:
-                          msg = 'Tidak ada koneksi internet';
-                          break;
-                        case -6:
-                          msg = 'Gagal koneksi ke server';
-                          break;
-                        case -15:
-                          msg = 'SSL Error - Sertifikat tidak valid';
-                          break;
-                        default:
-                          msg = 'Error ${error.errorCode}: ${error.description}';
-                      }
-                      setState(() {
-                        _isLoading = false;
-                        _errorMessage = msg;
-                      });
-                    },
                   ),
                 )
-                ..loadRequest(
-                  Uri.parse('URL_PLACEHOLDER'),
-                );
-            }
-
-            Future<void> _refresh() async {
-              await _controller.reload();
+                ..loadRequest(Uri.parse('URL_PLACEHOLDER'));
             }
 
             @override
             Widget build(BuildContext context) {
               return Scaffold(
-                key: _scaffoldKey,
-                backgroundColor: Colors.black,
-                body: RefreshIndicator(
-                  onRefresh: _refresh,
-                  color: Colors.white,
-                  backgroundColor: const Color(0xFF302B63),
-                  child: Stack(
-                    children: [
-                      WebViewWidget(controller: _controller),
-                      
-                      // Premium Loading Screen
-                      if (_isLoading && _progress < 0.95)
-                        Container(
-                          decoration: const BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                Color(0xFF0F0C29),
-                                Color(0xFF302B63),
-                                Color(0xFF24243E),
-                              ],
-                            ),
-                          ),
-                          child: Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                // Animated Logo
-                                TweenAnimationBuilder<double>(
-                                  tween: Tween(begin: 0.0, end: 1.0),
-                                  duration: const Duration(milliseconds: 800),
-                                  builder: (context, value, child) {
-                                    return Transform.scale(
-                                      scale: value,
-                                      child: Container(
-                                        width: 80,
-                                        height: 80,
-                                        decoration: BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          gradient: const LinearGradient(
-                                            colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
-                                          ),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: const Color(0xFF667EEA).withOpacity(0.5),
-                                              blurRadius: 20,
-                                              spreadRadius: 5,
-                                            ),
-                                          ],
-                                        ),
-                                        child: const Icon(
-                                          Icons.web,
-                                          color: Colors.white,
-                                          size: 40,
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                                const SizedBox(height: 32),
-                                // Loading Text
-                                const Text(
-                                  'Loading Experience',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w600,
-                                    letterSpacing: 1.2,
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-                                // Progress Bar
-                                Container(
-                                  width: 200,
-                                  height: 3,
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(2),
-                                  ),
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(2),
-                                    child: LinearProgressIndicator(
-                                      value: _progress,
-                                      backgroundColor: Colors.transparent,
-                                      valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                Text(
-                                  '${(_progress * 100).toInt()}%',
-                                  style: const TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
-                            ),
+                body: Stack(
+                  children: [
+                    WebViewWidget(controller: _controller),
+                    if (_isLoading)
+                      Container(
+                        color: Colors.white,
+                        child: const Center(
+                          child: CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
                           ),
                         ),
-                      
-                      // Error Message
-                      if (_errorMessage.isNotEmpty)
-                        Container(
-                          color: Colors.black.withOpacity(0.95),
-                          child: Center(
-                            child: Padding(
-                              padding: const EdgeInsets.all(24.0),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    !_hasInternet ? Icons.wifi_off : Icons.error_outline,
-                                    size: 64,
-                                    color: Colors.red,
-                                  ),
-                                  const SizedBox(height: 16),
-                                  Text(
-                                    !_hasInternet ? 'Tidak Ada Koneksi Internet' : _errorMessage,
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 24),
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      ElevatedButton.icon(
-                                        onPressed: () {
-                                          setState(() {
-                                            _errorMessage = '';
-                                            _isLoading = true;
-                                          });
-                                          _controller.reload();
-                                        },
-                                        icon: const Icon(Icons.refresh),
-                                        label: const Text('Coba Lagi'),
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: const Color(0xFF667EEA),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      if (!_hasInternet)
-                                        ElevatedButton.icon(
-                                          onPressed: _checkConnectivity,
-                                          icon: const Icon(Icons.wifi),
-                                          label: const Text('Cek Koneksi'),
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: const Color(0xFF302B63),
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
+                      ),
+                  ],
                 ),
               );
             }
@@ -427,46 +155,11 @@ jobs:
           sed -i "s|APP_NAME_PLACEHOLDER|${{ github.event.inputs.app_name }}|g" lib/main.dart
           sed -i "s|URL_PLACEHOLDER|${{ github.event.inputs.website_url }}|g" lib/main.dart
 
-          # Update AndroidManifest.xml
-          cat > android/app/src/main/AndroidManifest.xml << 'EOF'
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-              <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
-              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-              <uses-permission android:name="android.permission.CAMERA" />
-              <uses-permission android:name="android.permission.RECORD_AUDIO" />
-              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-              <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-              <uses-permission android:name="android.permission.VIBRATE" />
-              <uses-permission android:name="android.permission.WAKE_LOCK" />
-              <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-              
-              <application
-                  android:label="${{ github.event.inputs.app_name }}"
-                  android:icon="@mipmap/ic_launcher"
-                  android:usesCleartextTraffic="true"
-                  android:theme="@style/Theme.AppCompat.NoActionBar">
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true"
-                      android:configChanges="orientation|screenSize"
-                      android:theme="@style/Theme.AppCompat.NoActionBar">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
-
           flutter pub get
 
       - name: Build APK
         run: |
-          cd web2app_temp
+          cd /tmp/web2app_temp
           flutter build apk --release
 
       - name: Upload Release
@@ -474,6 +167,6 @@ jobs:
         with:
           tag_name: latest
           name: "${{ github.event.inputs.app_name }}"
-          files: web2app_temp/build/app/outputs/flutter-apk/app-release.apk
+          files: /tmp/web2app_temp/build/app/outputs/flutter-apk/app-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
