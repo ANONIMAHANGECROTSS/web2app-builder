@@ -87,7 +87,7 @@ jobs:
             sdk: '>=3.0.0 <4.0.0'
           dependencies:
             flutter: { sdk: flutter }
-            webview_flutter: ^4.10.0
+            flutter_inappwebview: ^5.8.0
             connectivity_plus: ^6.0.3
             http: ^1.2.1
           EOF
@@ -214,7 +214,7 @@ jobs:
           chunks = [b64[i:i+12] for i in range(0, len(b64), 12)]
           chunks_dart = " + ".join(f'"{c}"' for c in chunks)
 
-          # 2. Anti-WebView JS Shield v2 — Hides URLs from ALL interactive elements
+          # 2. Anti-WebView JS Shield v3 — InAppWebView compatible
           shield = '''
           (function(){
             'use strict';
@@ -239,7 +239,6 @@ jobs:
                 last=n;
               },false);
 
-              // Strip href from all links so WebView never sees a URL to preview
               function protectLinks(){
                 var links=document.querySelectorAll('a[href]');
                 for(var i=0;i<<links.length;i++){
@@ -257,31 +256,29 @@ jobs:
               var observer=new MutationObserver(function(mutations){protectLinks();});
               if(document.body) observer.observe(document.body,{childList:true,subtree:true});
 
-              // Click handler for protected links
               document.addEventListener('click',function(ev){
                 var el=ev.target;
                 while(el && el!==document.body){
                   var ph=el.getAttribute('data-ph');
                   if(ph){
                     ev.preventDefault();ev.stopPropagation();
-                    if(window.LinkBridge)window.LinkBridge.postMessage(ph);
+                    if(window.flutter_inappwebview) window.flutter_inappwebview.callHandler('LinkBridge', ph);
                     return false;
                   }
                   el=el.parentElement;
                 }
               },true);
 
-              // Intercept programmatic navigation
               var origAssign=window.location.assign;
               var origReplace=window.location.replace;
-              window.location.assign=function(url){if(window.LinkBridge)window.LinkBridge.postMessage(url);};
-              window.location.replace=function(url){if(window.LinkBridge)window.LinkBridge.postMessage(url);};
-              window.open=function(url,target,features){if(window.LinkBridge)window.LinkBridge.postMessage(url);return null;};
+              window.location.assign=function(url){if(window.flutter_inappwebview) window.flutter_inappwebview.callHandler('LinkBridge', url);};
+              window.location.replace=function(url){if(window.flutter_inappwebview) window.flutter_inappwebview.callHandler('LinkBridge', url);};
+              window.open=function(url,target,features){if(window.flutter_inappwebview) window.flutter_inappwebview.callHandler('LinkBridge', url);return null;};
 
               var origPushState=history.pushState;
               var origReplaceState=history.replaceState;
-              history.pushState=function(state,title,url){if(url&&window.LinkBridge)window.LinkBridge.postMessage(url.toString());return origPushState.apply(this,arguments);};
-              history.replaceState=function(state,title,url){if(url&&window.LinkBridge)window.LinkBridge.postMessage(url.toString());return origReplaceState.apply(this,arguments);};
+              history.pushState=function(state,title,url){if(url&&window.flutter_inappwebview) window.flutter_inappwebview.callHandler('LinkBridge', url.toString());return origPushState.apply(this,arguments);};
+              history.replaceState=function(state,title,url){if(url&&window.flutter_inappwebview) window.flutter_inappwebview.callHandler('LinkBridge', url.toString());return origReplaceState.apply(this,arguments);};
             }
             if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',S);
             else S();
@@ -291,7 +288,7 @@ jobs:
           imports = [
               "import 'package:flutter/material.dart';",
               "import 'package:flutter/services.dart';",
-              "import 'package:webview_flutter/webview_flutter.dart';",
+              "import 'package:flutter_inappwebview/flutter_inappwebview.dart';",
               "import 'package:connectivity_plus/connectivity_plus.dart';",
               "import 'dart:async';",
               "import 'dart:io';",
@@ -383,7 +380,7 @@ jobs:
           }}
 
           class _WebViewScreenState extends State<WebViewScreen> with TickerProviderStateMixin {{
-            late final WebViewController _controller;
+            InAppWebViewController? _controller;
             late final String _targetUrl;
             bool _isLoading = true;
             String _errorMessage = '';
@@ -401,7 +398,6 @@ jobs:
               _pulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 1500))..repeat(reverse: true);
               _shimmer = AnimationController(vsync: this, duration: const Duration(milliseconds: 2000))..repeat();
               _checkNet();
-              _initWebView();
             }}
 
             Future<void> _checkNet() async {{
@@ -411,7 +407,7 @@ jobs:
                 setState(() => _hasInternet = r != ConnectivityResult.none);
                 if (_hasInternet && _errorMessage.isNotEmpty) {{
                   _retryCount = 0;
-                  _controller.reload();
+                  _controller?.reload();
                 }}
               }});
             }}
@@ -437,97 +433,9 @@ jobs:
           """)
 
           lines.append(f"""
-            void _initWebView() {{
-              _controller = WebViewController()
-                ..setJavaScriptMode(JavaScriptMode.unrestricted)
-                ..setBackgroundColor(const Color(0x00000000))
-                ..addJavaScriptChannel('LinkBridge', onMessageReceived: (message) {{
-                  final href = message.message;
-                  final targetHost = Uri.parse(_targetUrl).host;
-                  final reqHost = Uri.tryParse(href)?.host ?? '';
-                  if (reqHost == targetHost || reqHost.endsWith('.' + targetHost)) {{
-                    _controller.loadRequest(Uri.parse(href));
-                  }}
-                }})
-                ..setNavigationDelegate(
-                  NavigationDelegate(
-                    onNavigationRequest: (request) {{
-                      final reqHost = Uri.parse(request.url).host;
-                      final targetHost = Uri.parse(_targetUrl).host;
-                      if (reqHost != targetHost && !request.url.startsWith('data:') && !request.url.startsWith('about:blank')) {{
-                        return NavigationDecision.prevent;
-                      }}
-                      return NavigationDecision.navigate;
-                    }},
-                    onProgress: (p) => setState(() => _progress = p / 100),
-                    onPageStarted: (String url) {{
-                      setState(() {{
-                        _isLoading = true;
-                        _errorMessage = '';
-                        _progress = 0;
-                      }});
-                      // Inject minimal protection immediately to block URL preview during load
-                      _controller.runJavaScript(
-                        "document.addEventListener('contextmenu',e=>e.preventDefault(),true);"
-                        "document.addEventListener('selectstart',e=>e.preventDefault(),true);"
-                      );
-                    }},
-                    onPageFinished: (String url) {{
-                      setState(() {{
-                        _isLoading = false;
-                        _retryCount = 0;
-                      }});
-                      _controller.runJavaScript(_kShield);
-                    }},
-                    onWebResourceError: (WebResourceError error) {{
-                      if (_retryCount < _maxRetries && _hasInternet) {{
-                        _retryCount++;
-                        final delay = Duration(seconds: _retryCount * 2);
-                        Future.delayed(delay, () {{
-                          if (mounted) _controller.reload();
-                        }});
-                        setState(() {{
-                          _errorMessage = 'Mencoba ulang ($_retryCount/$_maxRetries)...';
-                        }});
-                        return;
-                      }}
-                      String m = 'Error memuat halaman';
-                      switch (error.errorCode) {{
-                        case -2: m = 'Tidak ada koneksi internet'; break;
-                        case -6: m = 'Server menolak koneksi'; break;
-                        case -8: m = 'Server tidak merespon'; break;
-                        case -15: m = 'Sertifikat SSL tidak valid'; break;
-                        case -11: m = 'Timeout koneksi'; break;
-                        case -1: m = 'Request dibatalkan'; break;
-                      }}
-                      setState(() {{
-                        _isLoading = false;
-                        _errorMessage = m;
-                      }});
-                    }},
-                    onHttpError: (HttpResponseError error) {{
-                      if (_retryCount < _maxRetries) {{
-                        _retryCount++;
-                        Future.delayed(Duration(seconds: _retryCount * 2), () {{
-                          if (mounted) _controller.reload();
-                        }});
-                        setState(() => _errorMessage = 'HTTP Error - Mencoba ulang ($_retryCount/$_maxRetries)...');
-                        return;
-                      }}
-                      setState(() {{
-                        _isLoading = false;
-                        _errorMessage = 'HTTP Error: Gagal memuat konten';
-                      }});
-                    }},
-                  ),
-                )
-                ..loadRequest(Uri.parse(_targetUrl));
-              _reqPerm();
-            }}
-
             Future<void> _refresh() async {{
               _retryCount = 0;
-              await _controller.reload();
+              await _controller?.reload();
               await Future.delayed(const Duration(milliseconds: 800));
             }}
 
@@ -544,11 +452,102 @@ jobs:
                 backgroundColor: Colors.black,
                 body: Stack(
                   children: [
-                    SafeArea(
-                      top: false,
-                      bottom: false,
-                      maintainBottomViewPadding: true,
-                      child: WebViewWidget(controller: _controller),
+                    InAppWebView(
+                      initialUrlRequest: URLRequest(url: Uri.parse(_targetUrl)),
+                      initialOptions: InAppWebViewGroupOptions(
+                        crossPlatform: InAppWebViewOptions(
+                          disableContextMenu: true,
+                          supportZoom: false,
+                          useShouldOverrideUrlLoading: true,
+                          transparentBackground: true,
+                          javaScriptEnabled: true,
+                        ),
+                        android: AndroidInAppWebViewOptions(
+                          builtInZoomControls: false,
+                          displayZoomControls: false,
+                          useHybridComposition: true,
+                        ),
+                      ),
+                      onWebViewCreated: (controller) {{
+                        _controller = controller;
+                        controller.addJavaScriptHandler(
+                          handlerName: 'LinkBridge',
+                          callback: (args) {{
+                            final href = args.first as String;
+                            final targetHost = Uri.parse(_targetUrl).host;
+                            final reqHost = Uri.tryParse(href)?.host ?? '';
+                            if (reqHost == targetHost || reqHost.endsWith('.' + targetHost)) {{
+                              controller.loadUrl(urlRequest: URLRequest(url: Uri.parse(href)));
+                            }}
+                          }},
+                        );
+                        _reqPerm();
+                      }},
+                      onLoadStart: (controller, url) {{
+                        setState(() {{
+                          _isLoading = true;
+                          _errorMessage = '';
+                          _progress = 0;
+                        }});
+                      }},
+                      onLoadStop: (controller, url) {{
+                        setState(() {{
+                          _isLoading = false;
+                          _retryCount = 0;
+                        }});
+                        controller.evaluateJavascript(source: _kShield);
+                      }},
+                      onProgressChanged: (controller, progress) {{
+                        setState(() => _progress = progress / 100);
+                      }},
+                      shouldOverrideUrlLoading: (controller, navigationAction) async {{
+                        final reqHost = navigationAction.request.url?.host ?? '';
+                        final targetHost = Uri.parse(_targetUrl).host;
+                        if (reqHost != targetHost && reqHost.isNotEmpty) {{
+                          return NavigationActionPolicy.CANCEL;
+                        }}
+                        return NavigationActionPolicy.ALLOW;
+                      }},
+                      onLoadError: (controller, url, code, message) {{
+                        if (_retryCount < _maxRetries && _hasInternet) {{
+                          _retryCount++;
+                          final delay = Duration(seconds: _retryCount * 2);
+                          Future.delayed(delay, () {{
+                            if (mounted) _controller?.reload();
+                          }});
+                          setState(() {{
+                            _errorMessage = 'Mencoba ulang ($_retryCount/$_maxRetries)...';
+                          }});
+                          return;
+                        }}
+                        String m = 'Error memuat halaman';
+                        switch (code) {{
+                          case -2: m = 'Tidak ada koneksi internet'; break;
+                          case -6: m = 'Server menolak koneksi'; break;
+                          case -8: m = 'Server tidak merespon'; break;
+                          case -15: m = 'Sertifikat SSL tidak valid'; break;
+                          case -11: m = 'Timeout koneksi'; break;
+                          case -1: m = 'Request dibatalkan'; break;
+                        }}
+                        setState(() {{
+                          _isLoading = false;
+                          _errorMessage = m;
+                        }});
+                      }},
+                      onLoadHttpError: (controller, url, statusCode, description) {{
+                        if (_retryCount < _maxRetries) {{
+                          _retryCount++;
+                          Future.delayed(Duration(seconds: _retryCount * 2), () {{
+                            if (mounted) _controller?.reload();
+                          }});
+                          setState(() => _errorMessage = 'HTTP Error - Mencoba ulang ($_retryCount/$_maxRetries)...');
+                          return;
+                        }}
+                        setState(() {{
+                          _isLoading = false;
+                          _errorMessage = 'HTTP Error: Gagal memuat konten';
+                        }});
+                      }},
                     ),
                     if (_isLoading) _buildLoad(),
                     if (_errorMessage.isNotEmpty) _buildErr(),
@@ -699,7 +698,7 @@ jobs:
                                   _isLoading = true;
                                   _retryCount = 0;
                                 });
-                                _controller.reload();
+                                _controller?.reload();
                               },
                             ),
                             if (!_hasInternet) const SizedBox(width: 16),
