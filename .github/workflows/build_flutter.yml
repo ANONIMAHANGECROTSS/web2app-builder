@@ -123,12 +123,12 @@ jobs:
             @override
             Widget build(BuildContext context) {
               return MaterialApp(
-                title: '$APP',
+                title: '__APP__',
                 debugShowCheckedModeBanner: false,
                 theme: ThemeData(
                   useMaterial3: true,
                   colorScheme: ColorScheme.fromSeed(
-                    seedColor: Color($COLOR),
+                    seedColor: Color(__COLOR__),
                     brightness: Brightness.dark,
                   ),
                 ),
@@ -209,7 +209,7 @@ jobs:
                   },
                   onHttpError: (_) => setState(() { _isLoading = false; _errorMessage = 'HTTP Error'; }),
                 ))
-                ..loadRequest(Uri.parse('$URL'));
+                ..loadRequest(Uri.parse('__URL__'));
               _reqPerm();
             }
 
@@ -278,7 +278,7 @@ jobs:
                         ),
                       ),
                       const SizedBox(height: 8),
-                      Text('$APP', style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.4), letterSpacing: 1)),
+                      Text('__APP__', style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.4), letterSpacing: 1)),
                     ],
                   ),
                 ),
@@ -352,6 +352,9 @@ jobs:
             }
           }
           DART
+
+          # ===== REPLACE PLACEHOLDERS =====
+          sed -i "s|__URL__|$URL|g; s|__APP__|$APP|g; s|__COLOR__|$COLOR|g" lib/main.dart
 
           # ===== ANDROID NATIVE CONFIG =====
           mkdir -p android/app/src/main/res/values android/app/src/main/res/drawable
