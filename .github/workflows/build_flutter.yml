@@ -3,208 +3,111 @@ name: 🚀 Flutter Web2App Premium Builder
 on:
   workflow_dispatch:
     inputs:
-      website_url:
-        description: '🌐 URL Website'
-        required: true
-        type: string
-      app_name:
-        description: '📱 Nama Aplikasi'
-        required: true
-        type: string
-      primary_color:
-        description: '🎨 Primary Color (hex, contoh: 0xFF667EEA)'
-        required: true
-        type: string
-        default: '0xFF667EEA'
-      fullscreen_mode:
-        description: '⛶ Fullscreen Mode'
-        required: true
-        type: choice
-        options:
-          - immersive
-          - edge_to_edge
-          - normal
-        default: 'edge_to_edge'
-      orientation:
-        description: '📐 Orientasi Layar'
-        required: true
-        type: choice
-        options:
-          - auto
-          - portrait
-          - landscape
-        default: 'auto'
-      loading_style:
-        description: '✨ Gaya Loading'
-        required: true
-        type: choice
-        options:
-          - premium
-          - minimal
-        default: 'premium'
-      enable_pull_refresh:
-        description: '🔄 Pull to Refresh'
-        required: true
-        type: boolean
-        default: true
-      enable_localstorage:
-        description: '💾 LocalStorage Bridge (SharedPreferences)'
-        required: true
-        type: boolean
-        default: true
-      enable_wakelock:
-        description: '☀️ Keep Screen On'
-        required: true
-        type: boolean
-        default: false
-      enable_permissions:
-        description: '🔐 Aktifkan Permission Handler'
-        required: true
-        type: boolean
-        default: true
-      perm_camera:
-        description: '📷 Permission: Camera'
-        required: true
-        type: boolean
-        default: true
-      perm_mic:
-        description: '🎙️ Permission: Microphone'
-        required: true
-        type: boolean
-        default: false
-      perm_location:
-        description: '📍 Permission: Location'
-        required: true
-        type: boolean
-        default: true
-      perm_storage:
-        description: '📂 Permission: Storage'
-        required: true
-        type: boolean
-        default: true
-      perm_phone:
-        description: '📞 Permission: Phone'
-        required: true
-        type: boolean
-        default: false
-      perm_contacts:
-        description: '👥 Permission: Contacts'
-        required: true
-        type: boolean
-        default: false
-      perm_bluetooth:
-        description: '🔵 Permission: Bluetooth'
-        required: true
-        type: boolean
-        default: false
+      website_url: { description: '🌐 URL', required: true, type: string }
+      app_name: { description: '📱 Nama App', required: true, type: string }
+      primary_color: { description: '🎨 Warna', required: true, type: string, default: '0xFF667EEA' }
+      fullscreen_mode: { description: '⛶ Fullscreen', required: true, type: choice, options: [immersive, edge_to_edge, normal], default: edge_to_edge }
+      orientation: { description: '📐 Orientasi', required: true, type: choice, options: [auto, portrait, landscape], default: auto }
+      loading_style: { description: '✨ Loading', required: true, type: choice, options: [premium, minimal], default: premium }
+      enable_pull_refresh: { description: '🔄 Pull Refresh', required: true, type: boolean, default: true }
+      enable_localstorage: { description: '💾 LocalStorage', required: true, type: boolean, default: true }
+      enable_wakelock: { description: '☀️ Wakelock', required: true, type: boolean, default: false }
+      enable_permissions: { description: '🔐 Permission', required: true, type: boolean, default: true }
+      perm_camera: { description: '📷 Camera', required: true, type: boolean, default: true }
+      perm_mic: { description: '🎙️ Mic', required: true, type: boolean, default: false }
+      perm_location: { description: '📍 GPS', required: true, type: boolean, default: true }
+      perm_storage: { description: '📂 Storage', required: true, type: boolean, default: true }
+      perm_phone: { description: '📞 Phone', required: true, type: boolean, default: false }
+      perm_contacts: { description: '👥 Contacts', required: true, type: boolean, default: false }
+      perm_bluetooth: { description: '🔵 Bluetooth', required: true, type: boolean, default: false }
 
-permissions:
-  contents: write
+permissions: { contents: write }
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      URL: ${{ github.event.inputs.website_url }}
+      APP: ${{ github.event.inputs.app_name }}
+      COLOR: ${{ github.event.inputs.primary_color }}
+      FS: ${{ github.event.inputs.fullscreen_mode }}
+      ORIENT: ${{ github.event.inputs.orientation }}
+      LOAD: ${{ github.event.inputs.loading_style }}
+      PULL: ${{ github.event.inputs.enable_pull_refresh }}
+      LOCAL: ${{ github.event.inputs.enable_localstorage }}
+      WAKE: ${{ github.event.inputs.enable_wakelock }}
+      PERM: ${{ github.event.inputs.enable_permissions }}
+      CAM: ${{ github.event.inputs.perm_camera }}
+      MIC: ${{ github.event.inputs.perm_mic }}
+      LOC: ${{ github.event.inputs.perm_location }}
+      STO: ${{ github.event.inputs.perm_storage }}
+      PHO: ${{ github.event.inputs.perm_phone }}
+      CON: ${{ github.event.inputs.perm_contacts }}
+      BLU: ${{ github.event.inputs.perm_bluetooth }}
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: ☕ Setup Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
 
-      - name: 🎯 Setup Flutter 3.24.3
-        uses: subosito/flutter-action@v2
-        with:
-          channel: 'stable'
-          flutter-version: '3.24.3'
-          cache: true
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable, flutter-version: '3.24.3', cache: true }
 
       - name: 🤖 Setup Android SDK
         run: |
-          mkdir -p $HOME/android-sdk/cmdline-tools
-          cd $HOME/android-sdk
+          mkdir -p $HOME/android-sdk/cmdline-tools && cd $HOME/android-sdk
           wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
           unzip -q commandlinetools-linux-11076708_latest.zip
           mv cmdline-tools cmdline-tools-temp
-          mkdir -p cmdline-tools
-          mv cmdline-tools-temp cmdline-tools/latest
+          mkdir -p cmdline-tools && mv cmdline-tools-temp cmdline-tools/latest
           echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
           echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
           export PATH="$PATH:$HOME/android-sdk/cmdline-tools/latest/bin"
-          yes | sdkmanager --licenses > /dev/null 2>&1
+          yes | sdkmanager --licenses >/dev/null 2>&1
           sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
-      - name: 🏗️ Create Flutter Project & Configure
+      - name: 🏗️ Generate Flutter Project
         run: |
           flutter create --platforms=android --project-name=web2app --org com.web2app web2app_temp
           cd web2app_temp
 
-          # ==========================================
-          # 1. PUBSPEC.YAML DYNAMIC
-          # ==========================================
-          cat > pubspec.yaml << 'PUBEOF'
+          # ===== PUBSPEC =====
+          cat > pubspec.yaml <<EOF
           name: web2app
-          description: Web2App Premium Builder
+          description: Web2App Premium
           publish_to: 'none'
           version: 1.0.0+1
           environment:
             sdk: '>=3.0.0 <4.0.0'
           dependencies:
-            flutter:
-              sdk: flutter
+            flutter: { sdk: flutter }
             webview_flutter: ^4.10.0
             connectivity_plus: ^6.0.3
             http: ^1.2.1
-          PUBEOF
+          EOF
+          [ "$PERM" = "true" ] && echo "    permission_handler: ^11.3.1" >> pubspec.yaml
+          [ "$LOCAL" = "true" ] && echo "    shared_preferences: ^2.2.3" >> pubspec.yaml
+          [ "$WAKE" = "true" ] && echo "    wakelock_plus: ^1.2.8" >> pubspec.yaml
+          echo "flutter:" >> pubspec.yaml
+          echo "  uses-material-design: true" >> pubspec.yaml
 
-          if [ "${{ github.event.inputs.enable_permissions }}" == "true" ]; then
-            echo "    permission_handler: ^11.3.1" >> pubspec.yaml
-          fi
-          if [ "${{ github.event.inputs.enable_localstorage }}" == "true" ]; then
-            echo "    shared_preferences: ^2.2.3" >> pubspec.yaml
-          fi
-          if [ "${{ github.event.inputs.enable_wakelock }}" == "true" ]; then
-            echo "    wakelock_plus: ^1.2.8" >> pubspec.yaml
-          fi
-
-          cat >> pubspec.yaml << 'PUBEOF2'
-          flutter:
-            uses-material-design: true
-          PUBEOF2
-
-          # ==========================================
-          # 2. MAIN.DART DYNAMIC GENERATION
-          # ==========================================
-          cat > lib/main.dart << 'DARTEOF'
+          # ===== MAIN.DART HEADER =====
+          cat > lib/main.dart <<'DART'
           import 'package:flutter/material.dart';
           import 'package:flutter/services.dart';
           import 'package:webview_flutter/webview_flutter.dart';
           import 'package:connectivity_plus/connectivity_plus.dart';
           import 'dart:async';
-          import 'dart:io';
-          DARTEOF
+          DART
+          [ "$PERM" = "true" ] && echo "import 'package:permission_handler/permission_handler.dart';" >> lib/main.dart
+          [ "$LOCAL" = "true" ] && { echo "import 'package:shared_preferences/shared_preferences.dart';"; echo "import 'dart:convert';"; } >> lib/main.dart
+          [ "$WAKE" = "true" ] && echo "import 'package:wakelock_plus/wakelock_plus.dart';" >> lib/main.dart
 
-          if [ "${{ github.event.inputs.enable_permissions }}" == "true" ]; then
-            echo "import 'package:permission_handler/permission_handler.dart';" >> lib/main.dart
-          fi
-          if [ "${{ github.event.inputs.enable_localstorage }}" == "true" ]; then
-            echo "import 'package:shared_preferences/shared_preferences.dart';" >> lib/main.dart
-            echo "import 'dart:convert';" >> lib/main.dart
-          fi
-          if [ "${{ github.event.inputs.enable_wakelock }}" == "true" ]; then
-            echo "import 'package:wakelock_plus/wakelock_plus.dart';" >> lib/main.dart
-          fi
-
-          cat >> lib/main.dart << 'DARTEOF2'
-
+          # ===== MAIN.DART BODY =====
+          cat >> lib/main.dart <<'DART'
           void main() {
             WidgetsFlutterBinding.ensureInitialized();
-            _initSystemUI();
-            runApp(const MyApp());
-          }
-
-          void _initSystemUI() {
             SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
             SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
               statusBarColor: Colors.transparent,
@@ -212,20 +115,20 @@ jobs:
               statusBarIconBrightness: Brightness.light,
               systemNavigationBarIconBrightness: Brightness.light,
             ));
+            runApp(const MyApp());
           }
 
           class MyApp extends StatelessWidget {
             const MyApp({super.key});
-
             @override
             Widget build(BuildContext context) {
               return MaterialApp(
-                title: '${{ github.event.inputs.app_name }}',
+                title: '$APP',
                 debugShowCheckedModeBanner: false,
                 theme: ThemeData(
                   useMaterial3: true,
                   colorScheme: ColorScheme.fromSeed(
-                    seedColor: Color(${{ github.event.inputs.primary_color }}),
+                    seedColor: Color($COLOR),
                     brightness: Brightness.dark,
                   ),
                 ),
@@ -236,7 +139,6 @@ jobs:
 
           class WebViewScreen extends StatefulWidget {
             const WebViewScreen({super.key});
-
             @override
             State<WebViewScreen> createState() => _WebViewScreenState();
           }
@@ -247,176 +149,77 @@ jobs:
             String _errorMessage = '';
             bool _hasInternet = true;
             double _progress = 0;
-          DARTEOF2
-
-          if [ "${{ github.event.inputs.enable_localstorage }}" == "true" ]; then
-            cat >> lib/main.dart << 'DARTLOCAL'
-            late final SharedPreferences _prefs;
-            final _localStorageChannel = const JavaScriptChannelParams(
-              name: 'LocalStorageBridge',
-              onMessageReceived: _onLocalStorageMessage,
-            );
-            static void _onLocalStorageMessage(JavaScriptMessage message) async {
-              final data = jsonDecode(message.message);
-              final prefs = await SharedPreferences.getInstance();
-              if (data['action'] == 'set') {
-                await prefs.setString(data['key'], data['value']);
-              } else if (data['action'] == 'get') {
-                final val = prefs.getString(data['key']) ?? '';
-              } else if (data['action'] == 'remove') {
-                await prefs.remove(data['key']);
-              }
-            }
-          DARTLOCAL
-          fi
-
-          cat >> lib/main.dart << 'DARTEOF3'
-
-            late AnimationController _pulseController;
-            late AnimationController _shimmerController;
+            late AnimationController _pulse;
+            late AnimationController _shimmer;
 
             @override
             void initState() {
               super.initState();
-              _pulseController = AnimationController(
-                vsync: this,
-                duration: const Duration(milliseconds: 1500),
-              )..repeat(reverse: true);
-              _shimmerController = AnimationController(
-                vsync: this,
-                duration: const Duration(milliseconds: 2000),
-              )..repeat();
-          DARTEOF3
+              _pulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 1500))..repeat(reverse: true);
+              _shimmer = AnimationController(vsync: this, duration: const Duration(milliseconds: 2000))..repeat();
+          DART
+          [ "$WAKE" = "true" ] && echo "              WakelockPlus.enable();" >> lib/main.dart
 
-          if [ "${{ github.event.inputs.enable_wakelock }}" == "true" ]; then
-            echo "    WakelockPlus.enable();" >> lib/main.dart
-          fi
-
-          cat >> lib/main.dart << 'DARTEOF4'
-              _checkConnectivity();
+          cat >> lib/main.dart <<'DART'
+              _checkNet();
               _initWebView();
             }
 
-            Future<void> _checkConnectivity() async {
-              final result = await Connectivity().checkConnectivity();
-              setState(() => _hasInternet = result != ConnectivityResult.none);
-              Connectivity().onConnectivityChanged.listen((result) {
-                setState(() => _hasInternet = result != ConnectivityResult.none);
-                if (_hasInternet && _errorMessage.isNotEmpty) {
-                  _controller.reload();
-                }
+            Future<void> _checkNet() async {
+              final r = await Connectivity().checkConnectivity();
+              setState(() => _hasInternet = r != ConnectivityResult.none);
+              Connectivity().onConnectivityChanged.listen((r) {
+                setState(() => _hasInternet = r != ConnectivityResult.none);
+                if (_hasInternet && _errorMessage.isNotEmpty) _controller.reload();
               });
             }
 
-            Future<void> _requestPermissions() async {
-          DARTEOF4
-
-          if [ "${{ github.event.inputs.enable_permissions }}" == "true" ]; then
-            if [ "${{ github.event.inputs.perm_camera }}" == "true" ]; then
-              echo "    await Permission.camera.request();" >> lib/main.dart
-            fi
-            if [ "${{ github.event.inputs.perm_mic }}" == "true" ]; then
-              echo "    await Permission.microphone.request();" >> lib/main.dart
-            fi
-            if [ "${{ github.event.inputs.perm_location }}" == "true" ]; then
-              echo "    await Permission.location.request();" >> lib/main.dart
-            fi
-            if [ "${{ github.event.inputs.perm_storage }}" == "true" ]; then
-              echo "    await Permission.storage.request();" >> lib/main.dart
-              echo "    await Permission.photos.request();" >> lib/main.dart
-            fi
-            if [ "${{ github.event.inputs.perm_phone }}" == "true" ]; then
-              echo "    await Permission.phone.request();" >> lib/main.dart
-            fi
-            if [ "${{ github.event.inputs.perm_contacts }}" == "true" ]; then
-              echo "    await Permission.contacts.request();" >> lib/main.dart
-            fi
-            if [ "${{ github.event.inputs.perm_bluetooth }}" == "true" ]; then
-              echo "    await Permission.bluetooth.request();" >> lib/main.dart
-            fi
-          fi
-
-          cat >> lib/main.dart << 'DARTEOF5'
+            Future<void> _reqPerm() async {
+          DART
+          [ "$PERM" = "true" ] && {
+            [ "$CAM" = "true" ] && echo "              await Permission.camera.request();" >> lib/main.dart
+            [ "$MIC" = "true" ] && echo "              await Permission.microphone.request();" >> lib/main.dart
+            [ "$LOC" = "true" ] && echo "              await Permission.location.request();" >> lib/main.dart
+            [ "$STO" = "true" ] && { echo "              await Permission.storage.request();"; echo "              await Permission.photos.request();"; } >> lib/main.dart
+            [ "$PHO" = "true" ] && echo "              await Permission.phone.request();" >> lib/main.dart
+            [ "$CON" = "true" ] && echo "              await Permission.contacts.request();" >> lib/main.dart
+            [ "$BLU" = "true" ] && echo "              await Permission.bluetooth.request();" >> lib/main.dart
+          }
+          cat >> lib/main.dart <<'DART'
             }
 
             void _initWebView() {
               _controller = WebViewController()
                 ..setJavaScriptMode(JavaScriptMode.unrestricted)
                 ..setBackgroundColor(const Color(0x00000000))
-                ..setNavigationDelegate(
-                  NavigationDelegate(
-                    onProgress: (int progress) {
-                      setState(() => _progress = progress / 100);
-                    },
-                    onPageStarted: (String url) {
-                      setState(() {
-                        _isLoading = true;
-                        _errorMessage = '';
-                        _progress = 0;
-                      });
-                    },
-                    onPageFinished: (String url) async {
-                      setState(() => _isLoading = false);
-          DARTEOF5
-
-          if [ "${{ github.event.inputs.enable_localstorage }}" == "true" ]; then
-            cat >> lib/main.dart << 'DARTJS'
-                      await _controller.runJavaScript('''
-                        window.localStorage.setItem = function(key, value) {
-                          LocalStorageBridge.postMessage(JSON.stringify({action: 'set', key: key, value: value}));
-                          return originalSetItem.apply(this, arguments);
-                        };
-                      ''');
-          DARTJS
-          fi
-
-          cat >> lib/main.dart << 'DARTEOF6'
-                    },
-                    onWebResourceError: (WebResourceError error) {
-                      String msg = 'Error memuat halaman';
-                      switch (error.errorCode) {
-                        case -2: msg = 'Tidak ada koneksi internet'; break;
-                        case -6: msg = 'Server menolak koneksi'; break;
-                        case -8: msg = 'Server tidak merespon'; break;
-                        case -15: msg = 'Sertifikat SSL tidak valid'; break;
-                        case -11: msg = 'Timeout koneksi'; break;
-                      }
-                      setState(() {
-                        _isLoading = false;
-                        _errorMessage = msg;
-                      });
-                    },
-                    onHttpError: (HttpResponseError error) {
-                      setState(() {
-                        _isLoading = false;
-                        _errorMessage = 'HTTP Error: Gagal memuat konten';
-                      });
-                    },
-                  ),
-                )
-          DARTEOF6
-
-          if [ "${{ github.event.inputs.enable_localstorage }}" == "true" ]; then
-            echo "                ..addJavaScriptChannel('LocalStorageBridge', onMessageReceived: (message) {})" >> lib/main.dart
-          fi
-
-          cat >> lib/main.dart << 'DARTEOF7'
-                ..loadRequest(Uri.parse('${{ github.event.inputs.website_url }}'));
-
-              _requestPermissions();
+                ..setNavigationDelegate(NavigationDelegate(
+                  onProgress: (p) => setState(() => _progress = p / 100),
+                  onPageStarted: (_) => setState(() { _isLoading = true; _errorMessage = ''; _progress = 0; }),
+                  onPageFinished: (_) => setState(() => _isLoading = false),
+                  onWebResourceError: (e) {
+                    String m = 'Error memuat halaman';
+                    switch (e.errorCode) {
+                      case -2: m = 'Tidak ada koneksi internet'; break;
+                      case -6: m = 'Server menolak koneksi'; break;
+                      case -8: m = 'Server tidak merespon'; break;
+                      case -15: m = 'Sertifikat SSL tidak valid'; break;
+                      case -11: m = 'Timeout koneksi'; break;
+                    }
+                    setState(() { _isLoading = false; _errorMessage = m; });
+                  },
+                  onHttpError: (_) => setState(() { _isLoading = false; _errorMessage = 'HTTP Error'; }),
+                ))
+                ..loadRequest(Uri.parse('$URL'));
+              _reqPerm();
             }
 
-            Future<void> _onRefresh() async {
+            Future<void> _refresh() async {
               await _controller.reload();
               await Future.delayed(const Duration(milliseconds: 800));
             }
 
             @override
-            void dispose() {
-              _pulseController.dispose();
-              _shimmerController.dispose();
-              super.dispose();
-            }
+            void dispose() { _pulse.dispose(); _shimmer.dispose(); super.dispose(); }
 
             @override
             Widget build(BuildContext context) {
@@ -424,24 +227,19 @@ jobs:
                 backgroundColor: Colors.black,
                 body: Stack(
                   children: [
-                    SafeArea(
-                      top: false,
-                      bottom: false,
-                      maintainBottomViewPadding: true,
-                      child: WebViewWidget(controller: _controller),
-                    ),
-                    if (_isLoading) _buildLoadingScreen(),
-                    if (_errorMessage.isNotEmpty) _buildErrorScreen(),
+                    SafeArea(top: false, bottom: false, maintainBottomViewPadding: true, child: WebViewWidget(controller: _controller)),
+                    if (_isLoading) _buildLoad(),
+                    if (_errorMessage.isNotEmpty) _buildErr(),
                   ],
                 ),
               );
             }
+          DART
 
-            Widget _buildLoadingScreen() {
-          DARTEOF7
-
-          if [ "${{ github.event.inputs.loading_style }}" == "premium" ]; then
-            cat >> lib/main.dart << 'DARTLOAD'
+          # ===== LOADING WIDGET =====
+          if [ "$LOAD" = "premium" ]; then
+          cat >> lib/main.dart <<'DART'
+            Widget _buildLoad() {
               return Container(
                 color: const Color(0xFF0f0c29),
                 child: Center(
@@ -449,156 +247,78 @@ jobs:
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       AnimatedBuilder(
-                        animation: _pulseController,
-                        builder: (context, child) {
-                          return Container(
-                            width: 80 + (_pulseController.value * 20),
-                            height: 80 + (_pulseController.value * 20),
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              gradient: const SweepGradient(
-                                colors: [Color(0xFF667eea), Color(0xFF764ba2), Color(0xFF667eea)],
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: const Color(0xFF667eea).withOpacity(0.5 + (_pulseController.value * 0.3)),
-                                  blurRadius: 30 + (_pulseController.value * 20),
-                                  spreadRadius: 2,
-                                ),
-                              ],
-                            ),
-                            child: const Center(
-                              child: Icon(Icons.touch_app, color: Colors.white, size: 32),
-                            ),
-                          );
-                        },
+                        animation: _pulse,
+                        builder: (_, __) => Container(
+                          width: 80 + (_pulse.value * 20),
+                          height: 80 + (_pulse.value * 20),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: const SweepGradient(colors: [Color(0xFF667eea), Color(0xFF764ba2), Color(0xFF667eea)]),
+                            boxShadow: [BoxShadow(color: const Color(0xFF667eea).withOpacity(0.5 + _pulse.value * 0.3), blurRadius: 30 + _pulse.value * 20, spreadRadius: 2)],
+                          ),
+                          child: const Center(child: Icon(Icons.touch_app, color: Colors.white, size: 32)),
+                        ),
                       ),
                       const SizedBox(height: 40),
-                      ClipRRect(
+                      SizedBox(width: 200, height: 4, child: ClipRRect(
                         borderRadius: BorderRadius.circular(8),
-                        child: SizedBox(
-                          width: 200,
-                          height: 4,
-                          child: LinearProgressIndicator(
-                            value: _progress,
-                            backgroundColor: Colors.white10,
-                            valueColor: const AlwaysStoppedAnimation<<Color>(Color(0xFF667eea)),
-                          ),
-                        ),
-                      ),
+                        child: LinearProgressIndicator(value: _progress, backgroundColor: Colors.white10, valueColor: const AlwaysStoppedAnimation<<Color>(Color(0xFF667eea))),
+                      )),
                       const SizedBox(height: 24),
                       AnimatedBuilder(
-                        animation: _shimmerController,
-                        builder: (context, child) {
-                          return ShaderMask(
-                            shaderCallback: (bounds) {
-                              return LinearGradient(
-                                colors: const [Colors.white70, Colors.white, Colors.white70],
-                                stops: const [0.0, 0.5, 1.0],
-                                begin: Alignment(-1.0 + (_shimmerController.value * 2.0), 0),
-                                end: Alignment(_shimmerController.value * 2.0, 0),
-                              ).createShader(bounds);
-                            },
-                            child: const Text(
-                              'MEMUAT KONTEN...',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 3,
-                                color: Colors.white,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '${{ github.event.inputs.app_name }}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.white.withOpacity(0.4),
-                          letterSpacing: 1,
+                        animation: _shimmer,
+                        builder: (_, __) => ShaderMask(
+                          shaderCallback: (b) => LinearGradient(
+                            colors: const [Colors.white70, Colors.white, Colors.white70],
+                            stops: const [0.0, 0.5, 1.0],
+                            begin: Alignment(-1.0 + _shimmer.value * 2.0, 0),
+                            end: Alignment(_shimmer.value * 2.0, 0),
+                          ).createShader(b),
+                          child: const Text('MEMUAT KONTEN...', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, letterSpacing: 3, color: Colors.white)),
                         ),
                       ),
+                      const SizedBox(height: 8),
+                      Text('$APP', style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.4), letterSpacing: 1)),
                     ],
                   ),
                 ),
               );
-          DARTLOAD
+            }
+          DART
           else
-            cat >> lib/main.dart << 'DARTLOADMIN'
+          cat >> lib/main.dart <<'DART'
+            Widget _buildLoad() {
               return Container(
                 color: const Color(0xFF0f0c29),
-                child: const Center(
-                  child: CircularProgressIndicator(
-                    valueColor: AlwaysStoppedAnimation<<Color>(Color(0xFF667eea)),
-                  ),
-                ),
+                child: const Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<<Color>(Color(0xFF667eea)))),
               );
-          DARTLOADMIN
+            }
+          DART
           fi
 
-          cat >> lib/main.dart << 'DARTEOF8'
-            }
-
-            Widget _buildErrorScreen() {
+          # ===== ERROR WIDGET =====
+          cat >> lib/main.dart <<'DART'
+            Widget _buildErr() {
               return Container(
                 color: const Color(0xFF0f0c29),
                 child: Center(
                   child: Padding(
-                    padding: const EdgeInsets.all(32.0),
+                    padding: const EdgeInsets.all(32),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(
-                          !_hasInternet ? Icons.wifi_off_rounded : Icons.error_outline_rounded,
-                          size: 72,
-                          color: !_hasInternet ? Colors.orangeAccent : Colors.redAccent,
-                        ),
+                        Icon(!_hasInternet ? Icons.wifi_off_rounded : Icons.error_outline_rounded, size: 72, color: !_hasInternet ? Colors.orangeAccent : Colors.redAccent),
                         const SizedBox(height: 20),
-                        Text(
-                          !_hasInternet ? 'KONEKSI TERPUTUS' : 'TERJADI KESALAHAN',
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                            letterSpacing: 1,
-                          ),
-                        ),
+                        Text(!_hasInternet ? 'KONEKSI TERPUTUS' : 'TERJADI KESALAHAN', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 1)),
                         const SizedBox(height: 12),
-                        Text(
-                          _errorMessage,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.white.withOpacity(0.6),
-                            height: 1.5,
-                          ),
-                        ),
+                        Text(_errorMessage, textAlign: TextAlign.center, style: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.6), height: 1.5)),
                         const SizedBox(height: 32),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            _buildActionButton(
-                              icon: Icons.refresh_rounded,
-                              label: 'COBA LAGI',
-                              onTap: () {
-                                setState(() {
-                                  _errorMessage = '';
-                                  _isLoading = true;
-                                });
-                                _controller.reload();
-                              },
-                            ),
-                            if (!_hasInternet) ...[
-                              const SizedBox(width: 16),
-                              _buildActionButton(
-                                icon: Icons.wifi_find_rounded,
-                                label: 'CEK KONEKSI',
-                                onTap: _checkConnectivity,
-                                color: Colors.orangeAccent,
-                              ),
-                            ],
+                            _btn(Icons.refresh_rounded, 'COBA LAGI', () { setState(() { _errorMessage = ''; _isLoading = true; }); _controller.reload(); }),
+                            if (!_hasInternet) const SizedBox(width: 16),
+                            if (!_hasInternet) _btn(Icons.wifi_find_rounded, 'CEK KONEKSI', _checkNet, color: Colors.orangeAccent),
                           ],
                         ),
                       ],
@@ -608,62 +328,35 @@ jobs:
               );
             }
 
-            Widget _buildActionButton({
-              required IconData icon,
-              required String label,
-              required VoidCallback onTap,
-              Color color = const Color(0xFF667eea),
-            }) {
+            Widget _btn(IconData i, String l, VoidCallback t, {Color color = const Color(0xFF667eea)}) {
               return Material(
                 color: Colors.transparent,
                 child: InkWell(
-                  onTap: onTap,
+                  onTap: t,
                   borderRadius: BorderRadius.circular(16),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                     decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [color, color.withOpacity(0.7)],
-                      ),
+                      gradient: LinearGradient(colors: [color, color.withOpacity(0.7)]),
                       borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: color.withOpacity(0.3),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
+                      boxShadow: [BoxShadow(color: color.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 4))],
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(icon, color: Colors.white, size: 18),
-                        const SizedBox(width: 8),
-                        Text(
-                          label,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
-                    ),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(i, color: Colors.white, size: 18),
+                      const SizedBox(width: 8),
+                      Text(l, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13)),
+                    ]),
                   ),
                 ),
               );
             }
           }
-          DARTEOF8
+          DART
 
-          # ==========================================
-          # 3. ANDROID FULLSCREEN NATIVE CONFIG
-          # ==========================================
-          mkdir -p android/app/src/main/res/values
-          mkdir -p android/app/src/main/res/drawable
+          # ===== ANDROID NATIVE CONFIG =====
+          mkdir -p android/app/src/main/res/values android/app/src/main/res/drawable
 
-          # styles.xml - Edge to Edge
-          cat > android/app/src/main/res/values/styles.xml << 'STYLEEOF'
+          cat > android/app/src/main/res/values/styles.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
             <style name="LaunchTheme" parent="Theme.AppCompat.Light.NoActionBar">
@@ -683,26 +376,22 @@ jobs:
               <item name="android:windowTranslucentNavigation">true</item>
             </style>
           </resources>
-          STYLEEOF
+          EOF
 
-          # launch_background.xml
-          cat > android/app/src/main/res/drawable/launch_background.xml << 'DRAWEOF'
+          cat > android/app/src/main/res/drawable/launch_background.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
             <item android:drawable="@android:color/black" />
           </layer-list>
-          DRAWEOF
+          EOF
 
-          # MainActivity.kt - Edge to Edge programmatic
           mkdir -p android/app/src/main/kotlin/com/web2app/web2app
-          cat > android/app/src/main/kotlin/com/web2app/web2app/MainActivity.kt << 'KTEOF'
+          cat > android/app/src/main/kotlin/com/web2app/web2app/MainActivity.kt <<'EOF'
           package com.web2app.web2app
-
           import android.os.Bundle
           import android.view.WindowManager
           import io.flutter.embedding.android.FlutterActivity
           import androidx.core.view.WindowCompat
-
           class MainActivity: FlutterActivity() {
             override fun onCreate(savedInstanceState: Bundle?) {
               super.onCreate(savedInstanceState)
@@ -710,52 +399,29 @@ jobs:
               window.attributes.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
             }
           }
-          KTEOF
+          EOF
 
-          # AndroidManifest.xml orientation lock
-          ORIENTATION="${{ github.event.inputs.orientation }}"
-          if [ "$ORIENTATION" == "portrait" ]; then
-            SCREEN_ATTR='android:screenOrientation="portrait"'
-          elif [ "$ORIENTATION" == "landscape" ]; then
-            SCREEN_ATTR='android:screenOrientation="landscape"'
-          else
-            SCREEN_ATTR=''
-          fi
+          # ===== AndroidManifest.xml =====
+          SCREEN=""
+          [ "$ORIENT" = "portrait" ] && SCREEN='android:screenOrientation="portrait"'
+          [ "$ORIENT" = "landscape" ] && SCREEN='android:screenOrientation="landscape"'
 
-          cat > android/app/src/main/AndroidManifest.xml << 'MANEOF'
+          cat > android/app/src/main/AndroidManifest.xml <<EOF
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
             <uses-permission android:name="android.permission.INTERNET"/>
             <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
-          MANEOF
+          EOF
+          [ "$CAM" = "true" ] && echo '    <uses-permission android:name="android.permission.CAMERA"/>' >> android/app/src/main/AndroidManifest.xml
+          [ "$MIC" = "true" ] && echo '    <uses-permission android:name="android.permission.RECORD_AUDIO"/>' >> android/app/src/main/AndroidManifest.xml
+          [ "$LOC" = "true" ] && { echo '    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>'; echo '    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>'; } >> android/app/src/main/AndroidManifest.xml
+          [ "$STO" = "true" ] && { echo '    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>'; echo '    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>'; } >> android/app/src/main/AndroidManifest.xml
+          [ "$PHO" = "true" ] && echo '    <uses-permission android:name="android.permission.READ_PHONE_STATE"/>' >> android/app/src/main/AndroidManifest.xml
+          [ "$CON" = "true" ] && echo '    <uses-permission android:name="android.permission.READ_CONTACTS"/>' >> android/app/src/main/AndroidManifest.xml
+          [ "$BLU" = "true" ] && { echo '    <uses-permission android:name="android.permission.BLUETOOTH"/>'; echo '    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"/>'; } >> android/app/src/main/AndroidManifest.xml
 
-          if [ "${{ github.event.inputs.perm_camera }}" == "true" ]; then
-            echo '    <uses-permission android:name="android.permission.CAMERA"/>' >> android/app/src/main/AndroidManifest.xml
-          fi
-          if [ "${{ github.event.inputs.perm_mic }}" == "true" ]; then
-            echo '    <uses-permission android:name="android.permission.RECORD_AUDIO"/>' >> android/app/src/main/AndroidManifest.xml
-          fi
-          if [ "${{ github.event.inputs.perm_location }}" == "true" ]; then
-            echo '    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>' >> android/app/src/main/AndroidManifest.xml
-            echo '    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>' >> android/app/src/main/AndroidManifest.xml
-          fi
-          if [ "${{ github.event.inputs.perm_storage }}" == "true" ]; then
-            echo '    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>' >> android/app/src/main/AndroidManifest.xml
-            echo '    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>' >> android/app/src/main/AndroidManifest.xml
-          fi
-          if [ "${{ github.event.inputs.perm_phone }}" == "true" ]; then
-            echo '    <uses-permission android:name="android.permission.READ_PHONE_STATE"/>' >> android/app/src/main/AndroidManifest.xml
-          fi
-          if [ "${{ github.event.inputs.perm_contacts }}" == "true" ]; then
-            echo '    <uses-permission android:name="android.permission.READ_CONTACTS"/>' >> android/app/src/main/AndroidManifest.xml
-          fi
-          if [ "${{ github.event.inputs.perm_bluetooth }}" == "true" ]; then
-            echo '    <uses-permission android:name="android.permission.BLUETOOTH"/>' >> android/app/src/main/AndroidManifest.xml
-            echo '    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"/>' >> android/app/src/main/AndroidManifest.xml
-          fi
-
-          cat >> android/app/src/main/AndroidManifest.xml << 'MANEOF2'
+          cat >> android/app/src/main/AndroidManifest.xml <<EOF
             <application
-              android:label="${{ github.event.inputs.app_name }}"
+              android:label="$APP"
               android:name="\${applicationName}"
               android:icon="@mipmap/ic_launcher"
               android:usesCleartextTraffic="true">
@@ -767,38 +433,26 @@ jobs:
                 android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
                 android:hardwareAccelerated="true"
                 android:windowSoftInputMode="adjustResize"
-          MANEOF2
-
-          if [ -n "$SCREEN_ATTR" ]; then
-            echo "                $SCREEN_ATTR" >> android/app/src/main/AndroidManifest.xml
-          fi
-
-          cat >> android/app/src/main/AndroidManifest.xml << 'MANEOF3'
-                >
-                <meta-data
-                  android:name="io.flutter.embedding.android.NormalTheme"
-                  android:resource="@style/NormalTheme"
-                  />
+                $SCREEN>
+                <meta-data android:name="io.flutter.embedding.android.NormalTheme" android:resource="@style/NormalTheme"/>
                 <intent-filter>
                   <action android:name="android.intent.action.MAIN"/>
                   <category android:name="android.intent.category.LAUNCHER"/>
                 </intent-filter>
               </activity>
-              <meta-data
-                android:name="flutterEmbedding"
-                android:value="2" />
+              <meta-data android:name="flutterEmbedding" android:value="2"/>
             </application>
           </manifest>
-          MANEOF3
+          EOF
 
           flutter pub get
 
-      - name: 🔨 Build Release APK
+      - name: 🔨 Build APK
         run: |
           cd web2app_temp
           flutter build apk --release
 
-      - name: 🚀 Publish Release
+      - name: 🚀 Release APK
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ github.run_number }}
