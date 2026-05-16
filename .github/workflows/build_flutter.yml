@@ -5,18 +5,18 @@ on:
     inputs:
       website_url: { description: '🌐 URL Website', required: true, type: string }
       app_name: { description: '📱 Nama Aplikasi', required: true, type: string }
-      package_name: { description: '📦 Package Name (contoh: com.yourname.app)', required: true, type: string, default: 'com.web2app.app' }
-      primary_color: { description: '🎨 Primary Color (0xFF667EEA)', required: true, type: string, default: '0xFF667EEA' }
-      icon_url: { description: '🖼️ Icon URL (kosong = default)', required: false, type: string, default: '' }
-      fullscreen_mode: { description: '⛶ Fullscreen Mode', required: true, type: choice, options: [immersive, edge_to_edge, normal], default: edge_to_edge }
-      orientation: { description: '📐 Orientasi Layar', required: true, type: choice, options: [auto, portrait, landscape], default: auto }
-      loading_style: { description: '✨ Gaya Loading', required: true, type: choice, options: [premium, minimal], default: premium }
-      enable_pull_refresh: { description: '🔄 Pull to Refresh', required: true, type: boolean, default: true }
-      enable_localstorage: { description: '💾 LocalStorage Bridge', required: true, type: boolean, default: true }
-      enable_wakelock: { description: '☀️ Keep Screen On', required: true, type: boolean, default: false }
-      enable_permissions: { description: '🔐 Permission Handler', required: true, type: boolean, default: true }
+      package_name: { description: '📦 Package Name', required: true, type: string, default: 'com.kevin.app' }
+      primary_color: { description: '🎨 Primary Color', required: true, type: string, default: '0xFF667EEA' }
+      icon_url: { description: '🖼️ Icon URL', required: false, type: string, default: '' }
+      fullscreen_mode: { description: '⛶ Fullscreen', required: true, type: choice, options: [immersive, edge_to_edge, normal], default: edge_to_edge }
+      orientation: { description: '📐 Orientasi', required: true, type: choice, options: [auto, portrait, landscape], default: auto }
+      loading_style: { description: '✨ Loading', required: true, type: choice, options: [premium, minimal], default: premium }
+      enable_pull_refresh: { description: '🔄 Pull Refresh', required: true, type: boolean, default: true }
+      enable_localstorage: { description: '💾 LocalStorage', required: true, type: boolean, default: true }
+      enable_wakelock: { description: '☀️ Wakelock', required: true, type: boolean, default: false }
+      enable_permissions: { description: '🔐 Permission', required: true, type: boolean, default: true }
       perm_camera: { description: '📷 Camera', required: true, type: boolean, default: true }
-      perm_mic: { description: '🎙️ Microphone', required: true, type: boolean, default: false }
+      perm_mic: { description: '🎙️ Mic', required: true, type: boolean, default: false }
       perm_location: { description: '📍 Location', required: true, type: boolean, default: true }
       perm_storage: { description: '📂 Storage', required: true, type: boolean, default: true }
       perm_phone: { description: '📞 Phone', required: true, type: boolean, default: false }
@@ -73,7 +73,6 @@ jobs:
 
       - name: 🏗️ Generate Flutter Project
         run: |
-          # Extract org and project name from package
           ORG=$(echo "$PKG" | sed 's/\.[^.]*$//')
           PROJ=$(echo "$PKG" | awk -F. '{print $NF}')
           
@@ -94,18 +93,92 @@ jobs:
             connectivity_plus: ^6.0.3
             http: ^1.2.1
           EOF
-          [ "$PERM" = "true" ] && echo "  permission_handler: ^11.3.1" >> pubspec.yaml
+          [ "$PERM" = "true" ] && echo "  permission_handler: ^11.3.0" >> pubspec.yaml
           [ "$LOCAL" = "true" ] && echo "  shared_preferences: ^2.2.3" >> pubspec.yaml
-          [ "$WAKE" = "true" ] && echo "  wakelock_plus: ^1.2.8" >> pubspec.yaml
+          [ "$WAKE" = "true" ] && echo "  wakelock_plus: ^1.1.0" >> pubspec.yaml
           echo "flutter:" >> pubspec.yaml
           echo "  uses-material-design: true" >> pubspec.yaml
 
-          # ===== DOWNLOAD & SET ICON =====
+          # ===== FIX GRADLE =====
+          cat > android/build.gradle <<'GRADLE'
+          allprojects {
+            repositories {
+              google()
+              mavenCentral()
+            }
+          }
+          rootProject.buildDir = '../build'
+          subprojects {
+            project.buildDir = "${rootProject.buildDir}/${project.name}"
+            project.evaluationDependsOn(':app')
+          }
+          tasks.register("clean", Delete) {
+            delete rootProject.buildDir
+          }
+          GRADLE
+
+          cat > android/app/build.gradle <<GRADLE
+          plugins {
+            id "com.android.application"
+            id "kotlin-android"
+            id "dev.flutter.flutter-gradle-plugin"
+          }
+          android {
+            namespace "$PKG"
+            compileSdkVersion 34
+            ndkVersion flutter.ndkVersion
+            compileOptions {
+              sourceCompatibility JavaVersion.VERSION_17
+              targetCompatibility JavaVersion.VERSION_17
+            }
+            kotlinOptions { jvmTarget = '17' }
+            defaultConfig {
+              applicationId "$PKG"
+              minSdkVersion 21
+              targetSdkVersion 34
+              versionCode 1
+              versionName "1.0.0"
+            }
+            buildTypes {
+              release {
+                signingConfig signingConfigs.debug
+                minifyEnabled false
+                shrinkResources false
+              }
+            }
+          }
+          flutter { source = '../..' }
+          GRADLE
+
+          cat > android/settings.gradle <<'GRADLE'
+          pluginManagement {
+            def flutterSdkPath = {
+              def properties = new Properties()
+              file("local.properties").withInputStream { properties.load(it) }
+              def flutterSdkPath = properties.getProperty("flutter.sdk")
+              assert flutterSdkPath != null, "flutter.sdk not set in local.properties"
+              return flutterSdkPath
+            }()
+            includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
+            repositories {
+              google()
+              mavenCentral()
+              gradlePluginPortal()
+            }
+          }
+          plugins {
+            id "dev.flutter.flutter-plugin-loader" version "1.0.0"
+            id "com.android.application" version "8.1.0" apply false
+            id "org.jetbrains.kotlin.android" version "1.9.0" apply false
+          }
+          include ":app"
+          GRADLE
+
+          # ===== DOWNLOAD ICON =====
           if [ -n "$ICON" ]; then
             mkdir -p android/app/src/main/res/mipmap-xxxhdpi android/app/src/main/res/mipmap-xxhdpi android/app/src/main/res/mipmap-xhdpi android/app/src/main/res/mipmap-hdpi android/app/src/main/res/mipmap-mdpi
             curl -sL "$ICON" -o /tmp/icon.png || true
             if [ -f /tmp/icon.png ]; then
-              # Convert to proper sizes using ImageMagick or fallback
               for size in 192 144 96 72 48; do
                 dir="android/app/src/main/res/mipmap-xxxhdpi"
                 [ "$size" = "144" ] && dir="android/app/src/main/res/mipmap-xxhdpi"
@@ -117,7 +190,7 @@ jobs:
             fi
           fi
 
-          # ===== MAIN.DART HEADER =====
+          # ===== MAIN.DART =====
           cat > lib/main.dart <<'DART'
           import 'package:flutter/material.dart';
           import 'package:flutter/services.dart';
@@ -130,7 +203,6 @@ jobs:
           [ "$LOCAL" = "true" ] && { echo "import 'package:shared_preferences/shared_preferences.dart';"; echo "import 'dart:convert';"; } >> lib/main.dart
           [ "$WAKE" = "true" ] && echo "import 'package:wakelock_plus/wakelock_plus.dart';" >> lib/main.dart
 
-          # ===== MAIN.DART BODY =====
           cat >> lib/main.dart <<'DART'
           void main() {
             WidgetsFlutterBinding.ensureInitialized();
@@ -208,24 +280,22 @@ jobs:
             Future<void> _reqPerm() async {
           DART
           [ "$PERM" = "true" ] && {
-            [ "$CAM" = "true" ] && echo "              await _requestSinglePerm(Permission.camera, 'Camera', 'Aplikasi membutuhkan akses kamera');" >> lib/main.dart
-            [ "$MIC" = "true" ] && echo "              await _requestSinglePerm(Permission.microphone, 'Microphone', 'Aplikasi membutuhkan akses mikrofon');" >> lib/main.dart
-            [ "$LOC" = "true" ] && echo "              await _requestSinglePerm(Permission.location, 'Lokasi', 'Aplikasi membutuhkan akses lokasi');" >> lib/main.dart
-            [ "$STO" = "true" ] && { echo "              await _requestSinglePerm(Permission.storage, 'Penyimpanan', 'Aplikasi membutuhkan akses penyimpanan');"; echo "              await _requestSinglePerm(Permission.photos, 'Foto', 'Aplikasi membutuhkan akses galeri');"; } >> lib/main.dart
-            [ "$PHO" = "true" ] && echo "              await _requestSinglePerm(Permission.phone, 'Telepon', 'Aplikasi membutuhkan akses telepon');" >> lib/main.dart
-            [ "$CON" = "true" ] && echo "              await _requestSinglePerm(Permission.contacts, 'Kontak', 'Aplikasi membutuhkan akses kontak');" >> lib/main.dart
-            [ "$BLU" = "true" ] && echo "              await _requestSinglePerm(Permission.bluetooth, 'Bluetooth', 'Aplikasi membutuhkan akses bluetooth');" >> lib/main.dart
+            [ "$CAM" = "true" ] && echo "              await _requestSinglePerm(Permission.camera, 'Camera');" >> lib/main.dart
+            [ "$MIC" = "true" ] && echo "              await _requestSinglePerm(Permission.microphone, 'Microphone');" >> lib/main.dart
+            [ "$LOC" = "true" ] && echo "              await _requestSinglePerm(Permission.location, 'Lokasi');" >> lib/main.dart
+            [ "$STO" = "true" ] && { echo "              await _requestSinglePerm(Permission.storage, 'Penyimpanan');"; echo "              await _requestSinglePerm(Permission.photos, 'Galeri');"; } >> lib/main.dart
+            [ "$PHO" = "true" ] && echo "              await _requestSinglePerm(Permission.phone, 'Telepon');" >> lib/main.dart
+            [ "$CON" = "true" ] && echo "              await _requestSinglePerm(Permission.contacts, 'Kontak');" >> lib/main.dart
+            [ "$BLU" = "true" ] && echo "              await _requestSinglePerm(Permission.bluetooth, 'Bluetooth');" >> lib/main.dart
           }
           cat >> lib/main.dart <<'DART'
             }
 
-            Future<void> _requestSinglePerm(Permission perm, String name, String reason) async {
+            Future<void> _requestSinglePerm(Permission perm, String name) async {
               final status = await perm.status;
-              if (status.isDenied) {
+              if (status.isDenied || status.isRestricted) {
                 final result = await perm.request();
-                if (result.isPermanentlyDenied) {
-                  debugPrint('$name: Permanently denied');
-                }
+                debugPrint('$name: ${result.toString()}');
               }
             }
 
@@ -328,7 +398,6 @@ jobs:
             }
           DART
 
-          # ===== LOADING WIDGET =====
           if [ "$LOAD" = "premium" ]; then
           cat >> lib/main.dart <<'DART'
             Widget _buildLoad() {
@@ -423,7 +492,6 @@ jobs:
           DART
           fi
 
-          # ===== ERROR WIDGET =====
           cat >> lib/main.dart <<'DART'
             Widget _buildErr() {
               return Container(
@@ -535,10 +603,9 @@ jobs:
           }
           DART
 
-          # ===== REPLACE PLACEHOLDERS =====
           sed -i "s|__URL__|$URL|g; s|__APP__|$APP|g; s|__COLOR__|$COLOR|g" lib/main.dart
 
-          # ===== ANDROID NATIVE CONFIG =====
+          # ===== ANDROID CONFIG =====
           mkdir -p android/app/src/main/res/values android/app/src/main/res/drawable
 
           cat > android/app/src/main/res/values/styles.xml <<'EOF'
@@ -570,7 +637,6 @@ jobs:
           </layer-list>
           EOF
 
-          # ===== MAINACTIVITY.KT =====
           PKG_PATH=$(echo "$PKG" | tr '.' '/')
           mkdir -p "android/app/src/main/kotlin/$PKG_PATH"
           cat > "android/app/src/main/kotlin/$PKG_PATH/MainActivity.kt" <<EOF
@@ -588,7 +654,6 @@ jobs:
           }
           EOF
 
-          # ===== AndroidManifest.xml =====
           SCREEN=""
           [ "$ORIENT" = "portrait" ] && SCREEN='android:screenOrientation="portrait"'
           [ "$ORIENT" = "landscape" ] && SCREEN='android:screenOrientation="landscape"'
