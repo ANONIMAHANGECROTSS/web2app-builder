@@ -12,40 +12,40 @@ on:
         required: true
         type: string
       package_name:
-        description: 'Package Name'
+        description: 'Package Name (com.example.app)'
         required: false
         type: string
         default: 'com.web2app.generated'
-      pull_to_refresh:
-        description: 'Pull to Refresh'
+      app_icon_base64:
+        description: 'App Icon Base64 (optional)'
+        required: false
+        type: string
+        default: ''
+      enable_pull_refresh:
+        description: 'Enable Pull to Refresh'
         required: false
         type: boolean
         default: true
       enable_local_storage:
-        description: 'Local Storage'
+        description: 'Enable Local Storage'
         required: false
         type: boolean
         default: true
       enable_file_upload:
-        description: 'File Upload'
+        description: 'Enable File Upload'
         required: false
         type: boolean
         default: false
       enable_geolocation:
-        description: 'Geolocation'
+        description: 'Enable Geolocation'
         required: false
         type: boolean
         default: false
       enable_notifications:
-        description: 'Notifications'
+        description: 'Enable Notifications'
         required: false
         type: boolean
         default: false
-      app_icon_base64:
-        description: 'App Icon Base64'
-        required: false
-        type: string
-        default: ''
 
 permissions:
   contents: write
@@ -66,7 +66,6 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
-          flutter-version: '3.22.4'
           cache: true
 
       - name: Setup Android SDK
@@ -80,14 +79,23 @@ jobs:
           mv cmdline-tools-temp cmdline-tools/latest
           echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
           echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
-          export PATH="$PATH:$HOME/android-sdk/cmdline-tools/latest/bin"
           yes | sdkmanager --licenses > /dev/null 2>&1
           sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
       - name: Decode App Icon
         if: ${{ github.event.inputs.app_icon_base64 != '' }}
         run: |
-          echo "${{ github.event.inputs.app_icon_base64 }}" | base64 -d > /tmp/app_icon.png
+          echo "${{ github.event.inputs.app_icon_base64 }}" | base64 -d > app_icon.png
+          mkdir -p android/app/src/main/res/mipmap-hdpi
+          mkdir -p android/app/src/main/res/mipmap-mdpi
+          mkdir -p android/app/src/main/res/mipmap-xhdpi
+          mkdir -p android/app/src/main/res/mipmap-xxhdpi
+          mkdir -p android/app/src/main/res/mipmap-xxxhdpi
+          cp app_icon.png android/app/src/main/res/mipmap-hdpi/ic_launcher.png
+          cp app_icon.png android/app/src/main/res/mipmap-mdpi/ic_launcher.png
+          cp app_icon.png android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
+          cp app_icon.png android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+          cp app_icon.png android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
 
       - name: Create Flutter Project
         run: |
