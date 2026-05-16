@@ -214,9 +214,10 @@ jobs:
           chunks = [b64[i:i+12] for i in range(0, len(b64), 12)]
           chunks_dart = " + ".join(f'"{c}"' for c in chunks)
 
-          # 2. Anti-WebView JS Shield
+          # 2. Anti-WebView JS Shield v2 — Hides URLs from ALL interactive elements
           shield = '''
           (function(){
+            'use strict';
             function S(){
               var m=document.createElement('meta');
               m.name='viewport';
@@ -225,25 +226,11 @@ jobs:
               if(e)e.content=m.content;else document.head.appendChild(m);
 
               var s=document.createElement('style');
-              s.textContent='*{-webkit-user-select:none!important;user-select:none!important;-webkit-touch-callout:none!important;-webkit-tap-highlight-color:transparent!important;}';
+              s.textContent='*{-webkit-user-select:none!important;user-select:none!important;-webkit-touch-callout:none!important;-webkit-tap-highlight-color:transparent!important;caret-color:transparent!important;}';
               document.head.appendChild(s);
 
               document.addEventListener('contextmenu',function(e){e.preventDefault();return false;},true);
               document.addEventListener('selectstart',function(e){e.preventDefault();return false;},true);
-
-              document.addEventListener('click',function(e){
-                var el=e.target;
-                while(el&&el!==document.body){
-                  if(el.tagName==='A'){
-                    if(el.href&&el.href.startsWith('http')){
-                      e.preventDefault();e.stopPropagation();
-                      if(window.LinkBridge)window.LinkBridge.postMessage(el.href);
-                      return false;
-                    }break;
-                  }
-                  el=el.parentElement;
-                }
-              },true);
 
               var last=0;
               document.addEventListener('touchend',function(e){
@@ -252,7 +239,49 @@ jobs:
                 last=n;
               },false);
 
-              document.documentElement.style.setProperty('caret-color','transparent');
+              // Strip href from all links so WebView never sees a URL to preview
+              function protectLinks(){
+                var links=document.querySelectorAll('a[href]');
+                for(var i=0;i<<links.length;i++){
+                  var a=links[i];
+                  var href=a.getAttribute('href');
+                  if(href && href.match(/^https?:\\/\\//)){
+                    a.setAttribute('data-ph',href);
+                    a.removeAttribute('href');
+                    a.removeAttribute('target');
+                    a.style.cursor='pointer';
+                  }
+                }
+              }
+              protectLinks();
+              var observer=new MutationObserver(function(mutations){protectLinks();});
+              if(document.body) observer.observe(document.body,{childList:true,subtree:true});
+
+              // Click handler for protected links
+              document.addEventListener('click',function(ev){
+                var el=ev.target;
+                while(el && el!==document.body){
+                  var ph=el.getAttribute('data-ph');
+                  if(ph){
+                    ev.preventDefault();ev.stopPropagation();
+                    if(window.LinkBridge)window.LinkBridge.postMessage(ph);
+                    return false;
+                  }
+                  el=el.parentElement;
+                }
+              },true);
+
+              // Intercept programmatic navigation
+              var origAssign=window.location.assign;
+              var origReplace=window.location.replace;
+              window.location.assign=function(url){if(window.LinkBridge)window.LinkBridge.postMessage(url);};
+              window.location.replace=function(url){if(window.LinkBridge)window.LinkBridge.postMessage(url);};
+              window.open=function(url,target,features){if(window.LinkBridge)window.LinkBridge.postMessage(url);return null;};
+
+              var origPushState=history.pushState;
+              var origReplaceState=history.replaceState;
+              history.pushState=function(state,title,url){if(url&&window.LinkBridge)window.LinkBridge.postMessage(url.toString());return origPushState.apply(this,arguments);};
+              history.replaceState=function(state,title,url){if(url&&window.LinkBridge)window.LinkBridge.postMessage(url.toString());return origReplaceState.apply(this,arguments);};
             }
             if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',S);
             else S();
@@ -388,7 +417,6 @@ jobs:
             }}
           """)
 
-          # PERMISSION FUNCTIONS (conditional)
           if perm:
               lines.append(f"""
             Future<void> _reqPerm() async {{
@@ -438,6 +466,11 @@ jobs:
                         _errorMessage = '';
                         _progress = 0;
                       }});
+                      // Inject minimal protection immediately to block URL preview during load
+                      _controller.runJavaScript(
+                        "document.addEventListener('contextmenu',e=>e.preventDefault(),true);"
+                        "document.addEventListener('selectstart',e=>e.preventDefault(),true);"
+                      );
                     }},
                     onPageFinished: (String url) {{
                       setState(() {{
