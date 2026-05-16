@@ -13,7 +13,6 @@ on:
       loading_style: { description: '✨ Loading', required: true, type: choice, options: [premium, minimal], default: premium }
       enable_pull_refresh: { description: '🔄 Pull Refresh', required: true, type: boolean, default: true }
       enable_localstorage: { description: '💾 LocalStorage', required: true, type: boolean, default: true }
-      enable_wakelock: { description: '☀️ Wakelock', required: true, type: boolean, default: false }
       enable_permissions: { description: '🔐 Permission', required: true, type: boolean, default: true }
       perm_camera: { description: '📷 Camera', required: true, type: boolean, default: true }
       perm_mic: { description: '🎙️ Mic', required: true, type: boolean, default: false }
@@ -39,7 +38,6 @@ jobs:
       LOAD: ${{ github.event.inputs.loading_style }}
       PULL: ${{ github.event.inputs.enable_pull_refresh }}
       LOCAL: ${{ github.event.inputs.enable_localstorage }}
-      WAKE: ${{ github.event.inputs.enable_wakelock }}
       PERM: ${{ github.event.inputs.enable_permissions }}
       CAM: ${{ github.event.inputs.perm_camera }}
       MIC: ${{ github.event.inputs.perm_mic }}
@@ -79,7 +77,7 @@ jobs:
           flutter create --platforms=android --project-name="$PROJ" --org "$ORG" web2app_temp
           cd web2app_temp
 
-          # ===== PUBSPEC =====
+          # ===== PUBSPEC (SAFE - no wakelock_plus) =====
           cat > pubspec.yaml <<EOF
           name: $PROJ
           description: Web2App Premium
@@ -93,9 +91,8 @@ jobs:
             connectivity_plus: ^6.0.3
             http: ^1.2.1
           EOF
-          [ "$PERM" = "true" ] && echo "  permission_handler: ^11.3.0" >> pubspec.yaml
+          [ "$PERM" = "true" ] && echo "  permission_handler: ^10.4.0" >> pubspec.yaml
           [ "$LOCAL" = "true" ] && echo "  shared_preferences: ^2.2.3" >> pubspec.yaml
-          [ "$WAKE" = "true" ] && echo "  wakelock_plus: ^1.1.0" >> pubspec.yaml
           echo "flutter:" >> pubspec.yaml
           echo "  uses-material-design: true" >> pubspec.yaml
 
@@ -201,7 +198,6 @@ jobs:
           DART
           [ "$PERM" = "true" ] && echo "import 'package:permission_handler/permission_handler.dart';" >> lib/main.dart
           [ "$LOCAL" = "true" ] && { echo "import 'package:shared_preferences/shared_preferences.dart';"; echo "import 'dart:convert';"; } >> lib/main.dart
-          [ "$WAKE" = "true" ] && echo "import 'package:wakelock_plus/wakelock_plus.dart';" >> lib/main.dart
 
           cat >> lib/main.dart <<'DART'
           void main() {
@@ -257,10 +253,6 @@ jobs:
               super.initState();
               _pulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 1500))..repeat(reverse: true);
               _shimmer = AnimationController(vsync: this, duration: const Duration(milliseconds: 2000))..repeat();
-          DART
-          [ "$WAKE" = "true" ] && echo "              WakelockPlus.enable();" >> lib/main.dart
-
-          cat >> lib/main.dart <<'DART'
               _checkNet();
               _initWebView();
             }
