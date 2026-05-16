@@ -108,6 +108,14 @@ jobs:
           subprojects {
             project.buildDir = "${rootProject.buildDir}/${project.name}"
             project.evaluationDependsOn(':app')
+            configurations.all {
+              resolutionStrategy {
+                force 'org.jetbrains.kotlin:kotlin-stdlib:1.8.22'
+                force 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22'
+                force 'org.jetbrains.kotlin:kotlin-android-extensions-runtime:1.8.22'
+                force 'org.jetbrains.kotlin:kotlin-parcelize-runtime:1.8.22'
+              }
+            }
           }
           tasks.register("clean", Delete) {
             delete rootProject.buildDir
@@ -162,6 +170,13 @@ jobs:
               google()
               mavenCentral()
               gradlePluginPortal()
+            }
+            resolutionStrategy {
+              eachPlugin {
+                if (requested.id.id == 'org.jetbrains.kotlin.android') {
+                  useVersion '1.8.22'
+                }
+              }
             }
           }
           plugins {
