@@ -11,19 +11,6 @@ on:
         description: 'Nama Aplikasi'
         required: true
         type: string
-      package_name:
-        description: 'Package Name'
-        required: true
-        type: string
-      permissions:
-        description: 'Permissions (JSON array)'
-        required: false
-        type: string
-        default: '["INTERNET","ACCESS_NETWORK_STATE"]'
-      icon_url:
-        description: 'Icon URL (512x512 PNG)'
-        required: false
-        type: string
 
 permissions:
   contents: write
@@ -41,20 +28,14 @@ jobs:
           java-version: '17'
 
       - name: Setup Flutter
-        run: |
-          git clone https://github.com/flutter/flutter.git --depth 1 -b stable /opt/flutter
-          echo "/opt/flutter/bin" >> $GITHUB_PATH
-          echo "$HOME/.pub-cache/bin" >> $GITHUB_PATH
-
-      - name: Verify Flutter
-        run: |
-          export PATH="/opt/flutter/bin:$HOME/.pub-cache/bin:$PATH"
-          flutter precache
-          flutter doctor -v
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          flutter-version: '3.24.3'
+          cache: true
 
       - name: Setup Android SDK
         run: |
-          export PATH="/opt/flutter/bin:$PATH"
           mkdir -p $HOME/android-sdk/cmdline-tools
           cd $HOME/android-sdk
           wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
@@ -68,24 +49,14 @@ jobs:
           yes | sdkmanager --licenses > /dev/null 2>&1
           sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
-      - name: Download App Icon
-        if: github.event.inputs.icon_url != ''
+      - name: Create Flutter Project
         run: |
-          mkdir -p icon_temp
-          wget -O icon_temp/icon.png "${{ github.event.inputs.icon_url }}" || echo "Icon download failed, using default"
-
-      - name: Create Project
-        run: |
-          export PATH="/opt/flutter/bin:$HOME/.pub-cache/bin:$PATH"
-          
-          # Create Flutter project
-          flutter create --platforms=android --org=com.web2app --project-name=web2app web2app_temp
+          flutter create --platforms=android --project-name=web2app web2app_temp
           cd web2app_temp
 
-          # Update pubspec.yaml
           cat > pubspec.yaml << 'EOF'
           name: web2app
-          description: Web2App Generated Application
+          description: Web2App Flutter - Full Fix
           publish_to: 'none'
           version: 1.0.0+1
           environment:
@@ -94,35 +65,17 @@ jobs:
             flutter:
               sdk: flutter
             webview_flutter: ^4.4.0
-            webview_flutter_android: ^3.12.0
-            connectivity_plus: ^5.0.0
-            permission_handler: ^11.0.0
+            connectivity_plus: ^6.0.3
           flutter:
             uses-material-design: true
           EOF
 
-          # Create main.dart with full error handling
           cat > lib/main.dart << 'EOF'
           import 'package:flutter/material.dart';
-          import 'package:flutter/services.dart';
           import 'package:webview_flutter/webview_flutter.dart';
-          import 'package:webview_flutter_android/webview_flutter_android.dart';
           import 'package:connectivity_plus/connectivity_plus.dart';
-          import 'package:permission_handler/permission_handler.dart';
 
-          void main() {
-            WidgetsFlutterBinding.ensureInitialized();
-            SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-            SystemChrome.setSystemUIOverlayStyle(
-              const SystemUiOverlayStyle(
-                statusBarColor: Colors.transparent,
-                statusBarIconBrightness: Brightness.dark,
-                systemNavigationBarColor: Colors.transparent,
-                systemNavigationBarIconBrightness: Brightness.dark,
-              ),
-            );
-            runApp(const MyApp());
-          }
+          void main() => runApp(const MyApp());
 
           class MyApp extends StatelessWidget {
             const MyApp({super.key});
@@ -131,10 +84,6 @@ jobs:
               return MaterialApp(
                 title: 'APP_NAME_PLACEHOLDER',
                 debugShowCheckedModeBanner: false,
-                theme: ThemeData(
-                  primarySwatch: Colors.blue,
-                  useMaterial3: true,
-                ),
                 home: const WebViewScreen(),
               );
             }
@@ -147,269 +96,159 @@ jobs:
           }
 
           class _WebViewScreenState extends State<WebViewScreen> {
-            late final WebViewController controller;
-            bool isLoading = true;
-            bool hasError = false;
-            String errorMessage = '';
-            int loadProgress = 0;
-            bool isConnected = true;
+            late final WebViewController _controller;
+            bool _isLoading = true;
+            String _errorMessage = '';
+            bool _hasInternet = true;
 
             @override
             void initState() {
               super.initState();
-              _requestPermissions();
               _checkConnectivity();
-              _initializeWebView();
+              _initWebView();
             }
 
-            Future<void> _requestPermissions() async {
-              await Permission.storage.request();
-              await Permission.camera.request();
-              await Permission.microphone.request();
-            }
-
-            void _checkConnectivity() {
+            Future<void> _checkConnectivity() async {
+              final result = await Connectivity().checkConnectivity();
+              setState(() {
+                _hasInternet = result != ConnectivityResult.none;
+              });
               Connectivity().onConnectivityChanged.listen((result) {
                 setState(() {
-                  isConnected = result != ConnectivityResult.none;
-                  if (!isConnected) {
-                    hasError = true;
-                    errorMessage = 'No internet connection';
-                  } else if (hasError && errorMessage == 'No internet connection') {
-                    _reload();
-                  }
+                  _hasInternet = result != ConnectivityResult.none;
                 });
+                if (_hasInternet && _errorMessage.isNotEmpty) {
+                  _controller.reload();
+                }
               });
             }
 
-            void _initializeWebView() {
-              controller = WebViewController()
+            void _initWebView() {
+              _controller = WebViewController()
                 ..setJavaScriptMode(JavaScriptMode.unrestricted)
-                ..setBackgroundColor(Colors.white)
+                ..setBackgroundColor(const Color(0x00000000))
+                ..setUserAgentString(
+                  'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36'
+                )
                 ..setNavigationDelegate(
                   NavigationDelegate(
-                    onProgress: (int progress) {
-                      setState(() {
-                        loadProgress = progress;
-                        if (progress == 100) {
-                          Future.delayed(const Duration(milliseconds: 300), () {
-                            if (mounted) {
-                              setState(() {
-                                isLoading = false;
-                              });
-                            }
-                          });
-                        }
-                      });
-                    },
                     onPageStarted: (String url) {
                       setState(() {
-                        isLoading = true;
-                        hasError = false;
+                        _isLoading = true;
+                        _errorMessage = '';
                       });
                     },
                     onPageFinished: (String url) {
-                      Future.delayed(const Duration(milliseconds: 500), () {
-                        if (mounted) {
-                          setState(() {
-                            isLoading = false;
-                          });
-                        }
-                      });
+                      setState(() => _isLoading = false);
                     },
                     onWebResourceError: (WebResourceError error) {
-                      if (error.isForMainFrame ?? false) {
-                        setState(() {
-                          hasError = true;
-                          isLoading = false;
-                          errorMessage = _getErrorMessage(error.errorCode);
-                        });
+                      String msg = '';
+                      switch (error.errorCode) {
+                        case -2:
+                          msg = 'Tidak ada koneksi internet';
+                          break;
+                        case -6:
+                          msg = 'Gagal koneksi ke server (ERR_CONNECTION_REFUSED)';
+                          break;
+                        case -15:
+                          msg = 'SSL Error - Sertifikat tidak valid';
+                          break;
+                        case -8:
+                          msg = 'Server tidak merespon (ERR_EMPTY_RESPONSE)';
+                          break;
+                        default:
+                          msg = 'Error ${error.errorCode}: ${error.description}';
                       }
+                      setState(() {
+                        _isLoading = false;
+                        _errorMessage = msg;
+                      });
                     },
-                    onNavigationRequest: (NavigationRequest request) {
-                      return NavigationDecision.navigate;
+                    onHttpError: (HttpResponseError error) {
+                      setState(() {
+                        _isLoading = false;
+                        _errorMessage = 'HTTP Error - Gagal memuat halaman';
+                      });
                     },
                   ),
                 )
-                ..enableZoom(true);
-
-              // Configure Android WebView specifically
-              if (controller.platform is AndroidWebViewController) {
-                AndroidWebViewController.enableDebugging(false);
-                (controller.platform as AndroidWebViewController)
-                  ..setMediaPlaybackRequiresUserGesture(false)
-                  ..setGeolocationPermissionsPromptCallbacks(
-                    onShowPrompt: (request) async {
-                      return GeolocationPermissionsResponse(
-                        allow: true,
-                        retain: true,
-                      );
-                    },
-                  );
-              }
-
-              // Load URL with proper headers
-              controller.loadRequest(
-                Uri.parse('URL_PLACEHOLDER'),
-                headers: {
-                  'User-Agent': 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
-                  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                  'Accept-Language': 'en-US,en;q=0.9,id;q=0.8',
-                  'Accept-Encoding': 'gzip, deflate, br',
-                  'Connection': 'keep-alive',
-                  'Upgrade-Insecure-Requests': '1',
-                },
-              );
-            }
-
-            String _getErrorMessage(int errorCode) {
-              switch (errorCode) {
-                case -2:
-                  return 'No internet connection detected';
-                case -6:
-                  return 'Connection timeout\nPlease try again';
-                case -8:
-                  return 'Website not found\nCheck the URL';
-                case -10:
-                  return 'Connection refused\nServer is not responding';
-                case -15:
-                  return 'SSL Certificate error\nConnection is not secure';
-                default:
-                  return 'Failed to load website\nPlease try again';
-              }
-            }
-
-            void _reload() {
-              setState(() {
-                hasError = false;
-                isLoading = true;
-                loadProgress = 0;
-              });
-              controller.reload();
+                ..loadRequest(
+                  Uri.parse('URL_PLACEHOLDER'),
+                  headers: {
+                    'Cache-Control': 'no-cache, no-store, must-revalidate',
+                    'Pragma': 'no-cache',
+                    'Expires': '0',
+                  },
+                );
             }
 
             @override
             Widget build(BuildContext context) {
-              return WillPopScope(
-                onWillPop: () async {
-                  if (await controller.canGoBack()) {
-                    controller.goBack();
-                    return false;
-                  }
-                  return true;
-                },
-                child: Scaffold(
-                  backgroundColor: Colors.white,
-                  body: SafeArea(
-                    bottom: false,
-                    child: Stack(
-                      children: [
-                        if (!hasError)
-                          WebViewWidget(controller: controller),
-                        if (hasError)
-                          _buildErrorView(),
-                        if (isLoading && !hasError)
-                          _buildLoadingView(),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            }
-
-            Widget _buildLoadingView() {
-              return Container(
-                color: Colors.white,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+              return Scaffold(
+                body: Stack(
                   children: [
-                    SizedBox(
-                      width: 50,
-                      height: 50,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 3,
-                        value: loadProgress > 0 ? loadProgress / 100 : null,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      loadProgress > 0 ? 'Loading... $loadProgress%' : 'Loading...',
-                      style: const TextStyle(
-                        fontSize: 15,
-                        color: Colors.black54,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }
-
-            Widget _buildErrorView() {
-              return Container(
-                color: Colors.white,
-                padding: const EdgeInsets.all(32),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: Colors.red.shade50,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        Icons.error_outline_rounded,
-                        size: 64,
-                        color: Colors.red.shade400,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    Text(
-                      'Oops!',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.grey.shade900,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      errorMessage,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.grey.shade700,
-                        height: 1.5,
-                      ),
-                    ),
-                    const SizedBox(height: 32),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: _reload,
-                        icon: const Icon(Icons.refresh_rounded),
-                        label: const Text(
-                          'Try Again',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
+                    WebViewWidget(controller: _controller),
+                    if (_isLoading)
+                      Container(
+                        color: Colors.white,
+                        child: const Center(
+                          child: CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
                           ),
                         ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                            vertical: 16,
-                            horizontal: 32,
+                      ),
+                    if (_errorMessage.isNotEmpty)
+                      Container(
+                        color: Colors.white,
+                        child: Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24.0),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  !_hasInternet ? Icons.wifi_off : Icons.error_outline,
+                                  size: 64,
+                                  color: Colors.red,
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  !_hasInternet ? 'Tidak Ada Koneksi Internet' : _errorMessage,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 24),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    ElevatedButton.icon(
+                                      onPressed: () {
+                                        setState(() {
+                                          _errorMessage = '';
+                                          _isLoading = true;
+                                        });
+                                        _controller.reload();
+                                      },
+                                      icon: const Icon(Icons.refresh),
+                                      label: const Text('Coba Lagi'),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    if (!_hasInternet)
+                                      ElevatedButton.icon(
+                                        onPressed: _checkConnectivity,
+                                        icon: const Icon(Icons.signal_wifi_4),
+                                        label: const Text('Cek Koneksi'),
+                                      ),
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          elevation: 0,
                         ),
                       ),
-                    ),
                   ],
                 ),
               );
@@ -417,99 +256,21 @@ jobs:
           }
           EOF
 
-          # Replace placeholders
           sed -i "s|APP_NAME_PLACEHOLDER|${{ github.event.inputs.app_name }}|g" lib/main.dart
           sed -i "s|URL_PLACEHOLDER|${{ github.event.inputs.website_url }}|g" lib/main.dart
 
-          # Update AndroidManifest.xml with permissions
-          MANIFEST_FILE="android/app/src/main/AndroidManifest.xml"
-          
-          # Backup original
-          cp $MANIFEST_FILE ${MANIFEST_FILE}.bak
-          
-          # Parse permissions from input
-          PERMS='${{ github.event.inputs.permissions }}'
-          
-          # Add permissions after <manifest> tag
-          sed -i '/<manifest/a\    <!-- Network Permissions -->\n    <uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />\n    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />' $MANIFEST_FILE
-          
-          # Add optional permissions based on input
-          if echo "$PERMS" | grep -q "CAMERA"; then
-            sed -i '/<manifest/a\    <uses-permission android:name="android.permission.CAMERA" />' $MANIFEST_FILE
-          fi
-          
-          if echo "$PERMS" | grep -q "RECORD_AUDIO"; then
-            sed -i '/<manifest/a\    <uses-permission android:name="android.permission.RECORD_AUDIO" />\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />' $MANIFEST_FILE
-          fi
-          
-          if echo "$PERMS" | grep -q "WRITE_EXTERNAL_STORAGE"; then
-            sed -i '/<manifest/a\    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />' $MANIFEST_FILE
-          fi
-          
-          if echo "$PERMS" | grep -q "ACCESS_FINE_LOCATION"; then
-            sed -i '/<manifest/a\    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' $MANIFEST_FILE
-          fi
-          
-          if echo "$PERMS" | grep -q "SYSTEM_ALERT_WINDOW"; then
-            sed -i '/<manifest/a\    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />' $MANIFEST_FILE
-          fi
-          
-          if echo "$PERMS" | grep -q "VIBRATE"; then
-            sed -i '/<manifest/a\    <uses-permission android:name="android.permission.VIBRATE" />' $MANIFEST_FILE
-          fi
-          
-          if echo "$PERMS" | grep -q "WAKE_LOCK"; then
-            sed -i '/<manifest/a\    <uses-permission android:name="android.permission.WAKE_LOCK" />' $MANIFEST_FILE
-          fi
-
-          # Enable cleartext traffic and configure application
-          sed -i 's/android:label="web2app"/android:label="'"${{ github.event.inputs.app_name }}"'"\n        android:usesCleartextTraffic="true"\n        android:hardwareAccelerated="true"\n        android:largeHeap="true"/' $MANIFEST_FILE
-
-          # Update package name if provided
-          if [ -n "${{ github.event.inputs.package_name }}" ]; then
-            sed -i 's/package="com.web2app.web2app"/package="'"${{ github.event.inputs.package_name }}"'"/' $MANIFEST_FILE
-          fi
-
-          # Copy custom icon if downloaded
-          if [ -f ../icon_temp/icon.png ]; then
-            # Install ImageMagick for icon resizing
-            sudo apt-get update && sudo apt-get install -y imagemagick
-            
-            # Generate different icon sizes
-            convert ../icon_temp/icon.png -resize 48x48 android/app/src/main/res/mipmap-mdpi/ic_launcher.png
-            convert ../icon_temp/icon.png -resize 72x72 android/app/src/main/res/mipmap-hdpi/ic_launcher.png
-            convert ../icon_temp/icon.png -resize 96x96 android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
-            convert ../icon_temp/icon.png -resize 144x144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-            convert ../icon_temp/icon.png -resize 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-          fi
-
           flutter pub get
-          flutter clean
 
       - name: Build APK
         run: |
-          export PATH="/opt/flutter/bin:$HOME/.pub-cache/bin:$PATH"
           cd web2app_temp
-          flutter build apk --release --no-shrink
-
-      - name: Rename APK
-        run: |
-          cd web2app_temp/build/app/outputs/flutter-apk
-          APP_NAME="${{ github.event.inputs.app_name }}"
-          APP_NAME_CLEAN=$(echo "$APP_NAME" | tr ' ' '-' | tr '[:upper:]' '[:lower:]')
-          mv app-release.apk "${APP_NAME_CLEAN}.apk"
+          flutter build apk --release
 
       - name: Upload Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v1.0.${{ github.run_number }}
-          name: "${{ github.event.inputs.app_name }} - Build #${{ github.run_number }}"
-          body: |
-            📱 **App**: ${{ github.event.inputs.app_name }}
-            🌐 **URL**: ${{ github.event.inputs.website_url }}
-            📦 **Package**: ${{ github.event.inputs.package_name }}
-            🔧 **Build**: #${{ github.run_number }}
-            ⏰ **Date**: ${{ github.event.head_commit.timestamp }}
-          files: web2app_temp/build/app/outputs/flutter-apk/*.apk
+          tag_name: latest
+          name: "${{ github.event.inputs.app_name }}"
+          files: web2app_temp/build/app/outputs/flutter-apk/app-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
