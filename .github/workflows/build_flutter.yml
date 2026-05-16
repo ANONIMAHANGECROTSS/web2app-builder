@@ -386,9 +386,13 @@ jobs:
                 }}
               }});
             }}
+          """)
 
+          # PERMISSION FUNCTIONS (conditional)
+          if perm:
+              lines.append(f"""
             Future<void> _reqPerm() async {{
-              {'\n              '.join(plines) if plines else '// Permissions disabled'}
+              {'\n              '.join(plines)}
             }}
 
             Future<void> _requestSinglePerm(Permission perm, String name) async {{
@@ -398,7 +402,13 @@ jobs:
                 debugPrint(name + ': ' + result.toString());
               }}
             }}
+          """)
+          else:
+              lines.append("""
+            Future<void> _reqPerm() async {}
+          """)
 
+          lines.append(f"""
             void _initWebView() {{
               _controller = WebViewController()
                 ..setJavaScriptMode(JavaScriptMode.unrestricted)
