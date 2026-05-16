@@ -16,6 +16,31 @@ on:
         required: false
         type: string
         default: 'com.web2app.generated'
+      pull_to_refresh:
+        description: 'Pull to Refresh'
+        required: false
+        type: boolean
+        default: true
+      enable_local_storage:
+        description: 'Local Storage'
+        required: false
+        type: boolean
+        default: true
+      enable_file_upload:
+        description: 'File Upload'
+        required: false
+        type: boolean
+        default: false
+      enable_geolocation:
+        description: 'Geolocation'
+        required: false
+        type: boolean
+        default: false
+      enable_notifications:
+        description: 'Notifications'
+        required: false
+        type: boolean
+        default: false
       app_icon_base64:
         description: 'App Icon Base64'
         required: false
@@ -59,9 +84,13 @@ jobs:
           yes | sdkmanager --licenses > /dev/null 2>&1
           sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
+      - name: Decode App Icon
+        if: ${{ github.event.inputs.app_icon_base64 != '' }}
+        run: |
+          echo "${{ github.event.inputs.app_icon_base64 }}" | base64 -d > /tmp/app_icon.png
+
       - name: Create Flutter Project
         run: |
-          # Buat project di folder terpisah
           flutter create --platforms=android --project-name=web2app_temp /tmp/web2app_temp
           cd /tmp/web2app_temp
 
@@ -111,20 +140,12 @@ jobs:
             @override
             void initState() {
               super.initState();
-              _initWebView();
-            }
-
-            void _initWebView() {
               _controller = WebViewController()
                 ..setJavaScriptMode(JavaScriptMode.unrestricted)
                 ..setNavigationDelegate(
                   NavigationDelegate(
-                    onPageStarted: (String url) {
-                      setState(() => _isLoading = true);
-                    },
-                    onPageFinished: (String url) {
-                      setState(() => _isLoading = false);
-                    },
+                    onPageStarted: (url) => setState(() => _isLoading = true),
+                    onPageFinished: (url) => setState(() => _isLoading = false),
                   ),
                 )
                 ..loadRequest(Uri.parse('URL_PLACEHOLDER'));
