@@ -242,7 +242,7 @@ jobs:
 
               function protectLinks(){
                 var links=document.querySelectorAll('a[href]');
-                for(var i=0;i<<links.length;i++){
+                for(var i=0;i<links.length;i++){
                   var a=links[i];
                   var href=a.getAttribute('href');
                   if(href && href.match(/^https?:\\/\\//)){
@@ -597,7 +597,7 @@ jobs:
                           child: LinearProgressIndicator(
                             value: _progress,
                             backgroundColor: Colors.white10,
-                            valueColor: const AlwaysStoppedAnimation<<Color>(Color(0xFF667eea)),
+                            valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF667eea)),
                           ),
                         ),
                       ),
@@ -644,7 +644,7 @@ jobs:
                 color: const Color(0xFF0f0c29),
                 child: const Center(
                   child: CircularProgressIndicator(
-                    valueColor: AlwaysStoppedAnimation<<Color>(Color(0xFF667eea)),
+                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF667eea)),
                   ),
                 ),
               );
@@ -670,7 +670,7 @@ jobs:
                         Text(
                           !_hasInternet ? 'KONEKSI TERPUTUS' : 'TERJADI KESALAHAN',
                           style: const TextStyle(
-                            FontSize: 18,
+                            fontSize: 18,
                             fontWeight: FontWeight.bold,
                             color: Colors.white,
                             letterSpacing: 1,
